@@ -109,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
             binding.navPanel.btnPlayPause.setIconResource(uiState.isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
 
             // Disable controls during playback
-            setControlsEnabled(!uiState.isPlaying);
+            setControlsEnabled(!uiState.isPlaying && !uiState.isLoading);
 
 
             if (uiState.screenState == ScreenState.EDITOR && uiState.videoProperties != null) {
@@ -439,4 +439,4 @@ public class MainActivity extends AppCompatActivity {
             case "MMSSmmm": default: return String.format(java.util.Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis);
         }
     }
-                }
+        }
