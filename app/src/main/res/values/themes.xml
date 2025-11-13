@@ -1,0 +1,4 @@
+<resources>
+    <style name="Theme.App" parent="Theme.Material3.Dark" />
+    <style name="Theme.App.NoActionBar" parent="Theme.Material3.Dark.NoActionBar"/>
+</resources>
