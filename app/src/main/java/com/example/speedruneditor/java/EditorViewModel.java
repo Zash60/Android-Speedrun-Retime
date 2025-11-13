@@ -152,7 +152,6 @@ public class EditorViewModel extends ViewModel {
         String fileName = "render_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4";
         contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
         contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4");
-        // FIX: Use DIRECTORY_MOVIES for video files as per Scoped Storage rules.
         contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_MOVIES);
 
         Uri videoCollection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
@@ -179,7 +178,9 @@ public class EditorViewModel extends ViewModel {
             }
         }
         // Clean up the temporary file
-        sourceFile.delete();
+        if (sourceFile.exists()) {
+            sourceFile.delete();
+        }
     }
 
     // --- Playback Logic ---
@@ -195,7 +196,7 @@ public class EditorViewModel extends ViewModel {
         }
     }
 
-    private void stopPlayback() {
+    public void stopPlayback() {
         playbackHandler.removeCallbacksAndMessages(null); // Stop any pending playback tasks
         updateState(s -> s.buildUpon().setIsPlaying(false).build());
     }
@@ -236,7 +237,6 @@ public class EditorViewModel extends ViewModel {
         };
         playbackHandler.post(playbackRunnable);
     }
-
 
     public void loadVideoFromUri(Uri uri, Context context) {
         updateState(currentState -> currentState.buildUpon().setIsLoading(true).setStatusMessage("Analyzing video...").build());
@@ -605,4 +605,4 @@ public class EditorViewModel extends ViewModel {
             mainHandler.post(() -> _uiState.setValue(updater.update(currentState)));
         }
     }
-        }
+    }
