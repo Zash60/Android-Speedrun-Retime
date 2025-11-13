@@ -1,7 +1,6 @@
 package com.example.speedruneditor.java;
 
 import android.Manifest;
-import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -23,13 +22,11 @@ import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.media3.common.util.UnstableApi;
 import com.flask.colorpicker.ColorPickerView;
-import com.flask.colorpicker.OnColorSelectedListener;
-import com.flask.colorpicker.builder.ColorPickerClickListener;
 import com.flask.colorpicker.builder.ColorPickerDialogBuilder;
+import com.example.speedruneditor.java.databinding.ActivityMainBinding;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import com.example.speedruneditor.java.databinding.ActivityMainBinding;
 
 @UnstableApi
 public class MainActivity extends AppCompatActivity {
@@ -44,7 +41,8 @@ public class MainActivity extends AppCompatActivity {
     private static final long DEBOUNCE_DELAY_MS = 200;
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {});
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            });
 
     private final ActivityResultLauncher<String> videoPickerLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
@@ -87,18 +85,14 @@ public class MainActivity extends AppCompatActivity {
 
             if (uiState.isLoading) {
                 binding.progressBar.setVisibility(View.VISIBLE);
-                if (uiState.screenState == ScreenState.EDITOR) {
-                    binding.progressBar.setIndeterminate(false);
-                    binding.progressBar.setProgress(uiState.renderProgress);
-                } else {
-                    binding.progressBar.setIndeterminate(true);
-                }
+                binding.progressBar.setIndeterminate(uiState.screenState != ScreenState.EDITOR);
+                binding.progressBar.setProgress(uiState.renderProgress);
             } else {
                 binding.progressBar.setVisibility(View.GONE);
             }
 
             if (uiState.finalVideoPath != null) {
-                binding.textFinalPath.setText("Salvo em: " + uiState.finalVideoPath);
+                binding.textFinalPath.setText("Saved to: " + uiState.finalVideoPath);
                 binding.textFinalPath.setVisibility(View.VISIBLE);
             } else {
                 binding.textFinalPath.setVisibility(View.GONE);
@@ -106,14 +100,14 @@ public class MainActivity extends AppCompatActivity {
 
             if (uiState.screenState == ScreenState.EDITOR && uiState.videoProperties != null) {
                 binding.textVideoInfo.setText(String.format(java.util.Locale.US,
-                    "Info: %dx%d @ %.2ffps",
-                    uiState.videoProperties.width, uiState.videoProperties.height, uiState.videoProperties.fps));
+                        "Info: %dx%d @ %.2ffps",
+                        uiState.videoProperties.width, uiState.videoProperties.height, uiState.videoProperties.fps));
 
                 binding.imageViewPreview.setImageBitmap(uiState.currentFrameBitmap);
 
-                int maxFrames = (int)(uiState.videoProperties.duration * uiState.videoProperties.fps);
-                if(binding.seekBarFrame.getMax() != maxFrames) {
-                   binding.seekBarFrame.setMax(maxFrames);
+                int maxFrames = (int) (uiState.videoProperties.duration * uiState.videoProperties.fps);
+                if (binding.seekBarFrame.getMax() != maxFrames) {
+                    binding.seekBarFrame.setMax(maxFrames);
                 }
 
                 if (!binding.seekBarFrame.isPressed()) {
@@ -122,33 +116,33 @@ public class MainActivity extends AppCompatActivity {
 
                 double currentTime = uiState.currentFrame / uiState.videoProperties.fps;
                 String timeLabel = String.format(java.util.Locale.US,
-                    "Tempo: %s | Frame: %d",
-                    formatTime(currentTime, uiState.timerFormat), uiState.currentFrame);
+                        "Time: %s | Frame: %d",
+                        formatTime(currentTime, uiState.timerFormat), uiState.currentFrame);
                 String trimLabel = String.format(java.util.Locale.US,
-                    "Início: %s (f:%d) | Fim: %s (f:%d)",
-                    formatTime(uiState.startFrame / uiState.videoProperties.fps, uiState.timerFormat),
-                    uiState.startFrame,
-                    formatTime(uiState.endFrame / uiState.videoProperties.fps, uiState.timerFormat),
-                    uiState.endFrame);
-                binding.textTimeLabel.setText(timeLabel + "\\n" + trimLabel);
+                        "Start: %s (f:%d) | End: %s (f:%d)",
+                        formatTime(uiState.startFrame / uiState.videoProperties.fps, uiState.timerFormat),
+                        uiState.startFrame,
+                        formatTime(uiState.endFrame / uiState.videoProperties.fps, uiState.timerFormat),
+                        uiState.endFrame);
+                binding.textTimeLabel.setText(timeLabel + "\n" + trimLabel);
 
-                binding.textPositionXLabel.setText("Posição X: " + (int)(uiState.timerPositionX * 100) + "%");
+                binding.textPositionXLabel.setText("Position X: " + (int) (uiState.timerPositionX * 100) + "%");
                 if (!binding.seekBarPositionX.isPressed()) {
-                    binding.seekBarPositionX.setProgress((int)(uiState.timerPositionX * 100));
+                    binding.seekBarPositionX.setProgress((int) (uiState.timerPositionX * 100));
                 }
 
-                binding.textPositionYLabel.setText("Posição Y: " + (int)(uiState.timerPositionY * 100) + "%");
+                binding.textPositionYLabel.setText("Position Y: " + (int) (uiState.timerPositionY * 100) + "%");
                 if (!binding.seekBarPositionY.isPressed()) {
-                    binding.seekBarPositionY.setProgress((int)(uiState.timerPositionY * 100));
+                    binding.seekBarPositionY.setProgress((int) (uiState.timerPositionY * 100));
                 }
 
-                binding.textTimerSizeLabel.setText("Tamanho: " + uiState.timerSize);
+                binding.textTimerSizeLabel.setText("Size: " + uiState.timerSize);
                 if (!binding.seekBarTimerSize.isPressed()) {
-                   binding.seekBarTimerSize.setProgress(uiState.timerSize);
+                    binding.seekBarTimerSize.setProgress(uiState.timerSize);
                 }
 
                 if (uiState.customFontName != null) {
-                    binding.textCustomFontName.setText("Fonte: " + uiState.customFontName);
+                    binding.textCustomFontName.setText("Font: " + uiState.customFontName);
                     binding.textCustomFontName.setVisibility(View.VISIBLE);
                 } else {
                     binding.textCustomFontName.setVisibility(View.GONE);
@@ -157,8 +151,8 @@ public class MainActivity extends AppCompatActivity {
                 binding.switchOutline.setChecked(uiState.outlineEnabled);
                 binding.outlineControls.setVisibility(uiState.outlineEnabled ? View.VISIBLE : View.GONE);
 
-                binding.textOutlineWidthLabel.setText("Largura Contorno: " + uiState.outlineWidth);
-                if(!binding.seekBarOutlineWidth.isPressed()){
+                binding.textOutlineWidthLabel.setText("Outline Width: " + uiState.outlineWidth);
+                if (!binding.seekBarOutlineWidth.isPressed()) {
                     binding.seekBarOutlineWidth.setProgress(uiState.outlineWidth);
                 }
             }
@@ -168,19 +162,18 @@ public class MainActivity extends AppCompatActivity {
     private void setupListeners() {
         binding.btnSelectVideo.setOnClickListener(v -> videoPickerLauncher.launch("video/*"));
         binding.btnRender.setOnClickListener(v -> viewModel.startRender(this));
-
         binding.btnSelectFontFile.setOnClickListener(v -> fontPickerLauncher.launch("*/*"));
 
+        // Navigation Panel
         binding.navPanel.btnSetStart.setOnClickListener(v -> viewModel.setStartFrame());
         binding.navPanel.btnSetEnd.setOnClickListener(v -> viewModel.setEndFrame());
         binding.navPanel.btnGoToStart.setOnClickListener(v -> viewModel.goToStartFrame(this));
         binding.navPanel.btnGoToEnd.setOnClickListener(v -> viewModel.goToEndFrame(this));
 
+        // Main Seek Bar
         binding.seekBarFrame.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                 if(fromUser) {
-                    viewModel.updateCurrentFrame(progress);
-                }
+                if (fromUser) viewModel.updateCurrentFrame(progress);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override public void onStopTrackingTouch(SeekBar seekBar) {
@@ -188,71 +181,43 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        SeekBar.OnSeekBarChangeListener positionSeekBarListener = new SeekBar.OnSeekBarChangeListener() {
+        // Debounced Seek Bar Listener (for position, size, etc.)
+        SeekBar.OnSeekBarChangeListener debouncedSeekBarListener = new SeekBar.OnSeekBarChangeListener() {
             private Runnable debounceRunnable;
-            private void onPositionChanged(SeekBar seekBar, int progress, boolean isX) {
-                 float position = progress / 100.0f;
-                 if (isX) {
-                     viewModel.updateTimerPositionX(position);
-                 } else {
-                     viewModel.updateTimerPositionY(position);
-                 }
-                 debounceHandler.removeCallbacks(debounceRunnable);
-                 debounceRunnable = () -> viewModel.refreshPreview(MainActivity.this);
-                 debounceHandler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS);
-            }
 
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                 if (fromUser) {
-                    onPositionChanged(seekBar, progress, seekBar.getId() == binding.seekBarPositionX.getId());
-                 }
+                if (!fromUser) return;
+                
+                int id = seekBar.getId();
+                if (id == binding.seekBarPositionX.getId()) {
+                    viewModel.updateTimerPositionX(progress / 100.0f);
+                } else if (id == binding.seekBarPositionY.getId()) {
+                    viewModel.updateTimerPositionY(progress / 100.0f);
+                } else if (id == binding.seekBarTimerSize.getId()) {
+                    viewModel.setTimerSize(progress);
+                } else if (id == binding.seekBarOutlineWidth.getId()) {
+                    viewModel.setOutlineWidth(progress);
+                }
+
+                debounceHandler.removeCallbacks(debounceRunnable);
+                debounceRunnable = () -> viewModel.refreshPreview(MainActivity.this);
+                debounceHandler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override public void onStopTrackingTouch(SeekBar seekBar) {
-                 debounceHandler.removeCallbacks(debounceRunnable);
-                 viewModel.refreshPreview(MainActivity.this);
+                debounceHandler.removeCallbacks(debounceRunnable);
+                viewModel.refreshPreview(MainActivity.this);
             }
         };
 
-        binding.seekBarPositionX.setOnSeekBarChangeListener(positionSeekBarListener);
-        binding.seekBarPositionY.setOnSeekBarChangeListener(positionSeekBarListener);
-
-        binding.seekBarTimerSize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            private Runnable debounceRunnable;
-            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser) {
-                    viewModel.setTimerSize(progress);
-                    debounceHandler.removeCallbacks(debounceRunnable);
-                    debounceRunnable = () -> viewModel.refreshPreview(MainActivity.this);
-                    debounceHandler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS);
-                }
-            }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {
-                 debounceHandler.removeCallbacks(debounceRunnable);
-                 viewModel.refreshPreview(MainActivity.this);
-            }
-        });
+        binding.seekBarPositionX.setOnSeekBarChangeListener(debouncedSeekBarListener);
+        binding.seekBarPositionY.setOnSeekBarChangeListener(debouncedSeekBarListener);
+        binding.seekBarTimerSize.setOnSeekBarChangeListener(debouncedSeekBarListener);
+        binding.seekBarOutlineWidth.setOnSeekBarChangeListener(debouncedSeekBarListener);
 
         binding.switchOutline.setOnCheckedChangeListener((buttonView, isChecked) -> viewModel.toggleOutline(isChecked, this));
 
-        binding.seekBarOutlineWidth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            private Runnable debounceRunnable;
-            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser) {
-                    viewModel.setOutlineWidth(progress);
-                    debounceHandler.removeCallbacks(debounceRunnable);
-                    debounceRunnable = () -> viewModel.refreshPreview(MainActivity.this);
-                    debounceHandler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS);
-                }
-            }
-             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-             @Override public void onStopTrackingTouch(SeekBar seekBar) {
-                 debounceHandler.removeCallbacks(debounceRunnable);
-                 viewModel.refreshPreview(MainActivity.this);
-            }
-        });
-
+        // Navigation Buttons
         View.OnClickListener navListener = v -> {
             int id = v.getId();
             if (id == binding.navPanel.btnFrameMinus10.getId()) viewModel.navigateFrames(-10, this);
@@ -274,25 +239,18 @@ public class MainActivity extends AppCompatActivity {
             else if (id == binding.navPanel.btnMinPlus5.getId()) viewModel.navigateMinutes(5, this);
             else if (id == binding.navPanel.btnMinPlus10.getId()) viewModel.navigateMinutes(10, this);
         };
-
-        binding.navPanel.btnFrameMinus10.setOnClickListener(navListener);
-        binding.navPanel.btnFrameMinus5.setOnClickListener(navListener);
-        binding.navPanel.btnFrameMinus1.setOnClickListener(navListener);
-        binding.navPanel.btnFramePlus1.setOnClickListener(navListener);
-        binding.navPanel.btnFramePlus5.setOnClickListener(navListener);
-        binding.navPanel.btnFramePlus10.setOnClickListener(navListener);
-        binding.navPanel.btnSecMinus10.setOnClickListener(navListener);
-        binding.navPanel.btnSecMinus5.setOnClickListener(navListener);
-        binding.navPanel.btnSecMinus1.setOnClickListener(navListener);
-        binding.navPanel.btnSecPlus1.setOnClickListener(navListener);
-        binding.navPanel.btnSecPlus5.setOnClickListener(navListener);
-        binding.navPanel.btnSecPlus10.setOnClickListener(navListener);
-        binding.navPanel.btnMinMinus10.setOnClickListener(navListener);
-        binding.navPanel.btnMinMinus5.setOnClickListener(navListener);
-        binding.navPanel.btnMinMinus1.setOnClickListener(navListener);
-        binding.navPanel.btnMinPlus1.setOnClickListener(navListener);
-        binding.navPanel.btnMinPlus5.setOnClickListener(navListener);
-        binding.navPanel.btnMinPlus10.setOnClickListener(navListener);
+        // Apply listener to all navigation buttons
+        int[] navButtonIds = {
+                binding.navPanel.btnFrameMinus10.getId(), binding.navPanel.btnFrameMinus5.getId(), binding.navPanel.btnFrameMinus1.getId(),
+                binding.navPanel.btnFramePlus1.getId(), binding.navPanel.btnFramePlus5.getId(), binding.navPanel.btnFramePlus10.getId(),
+                binding.navPanel.btnSecMinus10.getId(), binding.navPanel.btnSecMinus5.getId(), binding.navPanel.btnSecMinus1.getId(),
+                binding.navPanel.btnSecPlus1.getId(), binding.navPanel.btnSecPlus5.getId(), binding.navPanel.btnSecPlus10.getId(),
+                binding.navPanel.btnMinMinus10.getId(), binding.navPanel.btnMinMinus5.getId(), binding.navPanel.btnMinMinus1.getId(),
+                binding.navPanel.btnMinPlus1.getId(), binding.navPanel.btnMinPlus5.getId(), binding.navPanel.btnMinPlus10.getId()
+        };
+        for(int id : navButtonIds) {
+            findViewById(id).setOnClickListener(navListener);
+        }
     }
 
     private void setupTimerFormatSpinner() {
@@ -321,9 +279,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupFontSpinner() {
-        fontMap.put("Padrão (Negrito)", Typeface.DEFAULT_BOLD);
-        fontMap.put("Monospace (Negrito)", Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
-        fontMap.put("Serif (Negrito)", Typeface.create(Typeface.SERIF, Typeface.BOLD));
+        fontMap.put("Default (Bold)", Typeface.DEFAULT_BOLD);
+        fontMap.put("Monospace (Bold)", Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
+        fontMap.put("Serif (Bold)", Typeface.create(Typeface.SERIF, Typeface.BOLD));
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, fontMap.keySet().toArray(new String[0]));
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -342,27 +300,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupColorPickers() {
-        int[] colors = { Color.WHITE, Color.BLACK, Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN, Color.BLUE, 0xFFFF00FF };
+        int[] colors = {Color.WHITE, Color.BLACK, Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN, Color.BLUE, 0xFFFF00FF};
         for (int color : colors) {
             binding.timerColorPicker.colorContainer.addView(createColorView(color, true));
             binding.outlineColorPicker.colorContainer.addView(createColorView(color, false));
         }
 
-        binding.timerColorPicker.btnCustomColor.setOnClickListener(v -> {
-            UiState state = viewModel.getUiState().getValue();
-            if (state != null) showColorPickerDialog(true, state.timerColor);
-        });
-        binding.outlineColorPicker.btnCustomColor.setOnClickListener(v -> {
-            UiState state = viewModel.getUiState().getValue();
-            if (state != null) showColorPickerDialog(false, state.outlineColor);
-        });
+        binding.timerColorPicker.btnCustomColor.setOnClickListener(v -> showColorPickerDialog(true));
+        binding.outlineColorPicker.btnCustomColor.setOnClickListener(v -> showColorPickerDialog(false));
     }
 
-    private void showColorPickerDialog(boolean isForTimer, int initialColor) {
+    private void showColorPickerDialog(boolean isForTimer) {
+        UiState state = viewModel.getUiState().getValue();
+        if (state == null) return;
+
         ColorPickerDialogBuilder
                 .with(this)
-                .setTitle("Escolha uma Cor")
-                .initialColor(initialColor)
+                .setTitle("Choose Color")
+                .initialColor(isForTimer ? state.timerColor : state.outlineColor)
                 .wheelType(ColorPickerView.WHEEL_TYPE.FLOWER)
                 .density(12)
                 .setPositiveButton("OK", (dialog, selectedColor, allColors) -> {
@@ -372,7 +327,7 @@ public class MainActivity extends AppCompatActivity {
                         viewModel.updateOutlineColor(selectedColor, MainActivity.this);
                     }
                 })
-                .setNegativeButton("Cancelar", (dialog, which) -> {})
+                .setNegativeButton("Cancel", (dialog, which) -> {})
                 .build()
                 .show();
     }
@@ -402,12 +357,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void requestStoragePermission() {
-        String permission;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permission = Manifest.permission.READ_MEDIA_VIDEO;
-        } else {
-            permission = Manifest.permission.READ_EXTERNAL_STORAGE;
-        }
+        String permission = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ?
+                Manifest.permission.READ_MEDIA_VIDEO :
+                Manifest.permission.READ_EXTERNAL_STORAGE;
+
         if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
             requestPermissionLauncher.launch(permission);
         }
@@ -424,25 +377,13 @@ public class MainActivity extends AppCompatActivity {
         long centis = (totalMillis / 10) % 100;
 
         switch (format) {
-            case "HHMMSSmmm":
-                return String.format(java.util.Locale.US, "%d:%02d:%02d.%03d", hours, minutes, seconds, millis);
-            case "SSmmm":
-                return String.format(java.util.Locale.US, "%.3f", totalSeconds);
-            case "HHMMSS":
-                return String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, seconds);
-            case "MMSS":
-                 long totalMinutes = TimeUnit.MILLISECONDS.toMinutes(totalMillis);
-                return String.format(java.util.Locale.US, "%d:%02d", totalMinutes, seconds);
-            case "MMSScc_pad":
-                long totalMinutesPad = TimeUnit.MILLISECONDS.toMinutes(totalMillis);
-                return String.format(java.util.Locale.US, "%02d:%02d.%02d", totalMinutesPad, seconds, centis);
-            case "MMSScc":
-                 long totalMinutesNoPad = TimeUnit.MILLISECONDS.toMinutes(totalMillis);
-                return String.format(java.util.Locale.US, "%d:%02d.%02d", totalMinutesNoPad, seconds, centis);
-            case "MMSSmmm":
-            default:
-                 long totalMinutesDefault = TimeUnit.MILLISECONDS.toMinutes(totalMillis);
-                return String.format(java.util.Locale.US, "%d:%02d.%03d", totalMinutesDefault, seconds, millis);
+            case "HHMMSSmmm": return String.format(java.util.Locale.US, "%d:%02d:%02d.%03d", hours, minutes, seconds, millis);
+            case "SSmmm": return String.format(java.util.Locale.US, "%.3f", totalSeconds);
+            case "HHMMSS": return String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, seconds);
+            case "MMSS": return String.format(java.util.Locale.US, "%d:%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds);
+            case "MMSScc_pad": return String.format(java.util.Locale.US, "%02d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis);
+            case "MMSScc": return String.format(java.util.Locale.US, "%d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis);
+            case "MMSSmmm": default: return String.format(java.util.Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis);
         }
     }
-}
+            }
