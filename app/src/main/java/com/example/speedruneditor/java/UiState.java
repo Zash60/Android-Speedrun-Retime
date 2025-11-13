@@ -9,7 +9,6 @@ import androidx.annotation.Nullable;
 public class UiState {
     @NonNull public final ScreenState screenState;
     public final boolean isLoading;
-    public final boolean isPlaying;
     @NonNull public final String statusMessage;
     public final int renderProgress;
     @Nullable public final String finalVideoPath;
@@ -30,11 +29,9 @@ public class UiState {
     public final int outlineWidth;
     public final int outlineColor;
 
-    // Default initial state
     public UiState() {
         this.screenState = ScreenState.INITIAL;
         this.isLoading = false;
-        this.isPlaying = false;
         this.statusMessage = "Select a video from your device.";
         this.renderProgress = 0;
         this.finalVideoPath = null;
@@ -44,23 +41,21 @@ public class UiState {
         this.startFrame = 0;
         this.endFrame = 0;
         this.currentFrameBitmap = null;
-        this.timerPositionX = 0.86f; // Bottom-right default
-        this.timerPositionY = 0.95f; // Bottom-right default
+        this.timerPositionX = 0.86f;
+        this.timerPositionY = 0.95f;
         this.timerSize = 80;
-        this.timerColor = 0xFFFFFFFF; // White
+        this.timerColor = 0xFFFFFFFF;
         this.timerFormat = "MMSSmmm";
         this.timerTypeface = Typeface.DEFAULT_BOLD;
         this.customFontName = null;
         this.outlineEnabled = true;
         this.outlineWidth = 3;
-        this.outlineColor = 0xFF000000; // Black
+        this.outlineColor = 0xFF000000;
     }
 
-    // Private constructor for the Builder
     private UiState(Builder builder) {
         this.screenState = builder.screenState;
         this.isLoading = builder.isLoading;
-        this.isPlaying = builder.isPlaying;
         this.statusMessage = builder.statusMessage;
         this.renderProgress = builder.renderProgress;
         this.finalVideoPath = builder.finalVideoPath;
@@ -89,7 +84,6 @@ public class UiState {
     public static class Builder {
         private ScreenState screenState;
         private boolean isLoading;
-        private boolean isPlaying;
         private String statusMessage;
         private int renderProgress;
         private String finalVideoPath;
@@ -113,7 +107,6 @@ public class UiState {
         public Builder(UiState oldState) {
             this.screenState = oldState.screenState;
             this.isLoading = oldState.isLoading;
-            this.isPlaying = oldState.isPlaying;
             this.statusMessage = oldState.statusMessage;
             this.renderProgress = oldState.renderProgress;
             this.finalVideoPath = oldState.finalVideoPath;
@@ -137,7 +130,6 @@ public class UiState {
 
         public Builder setScreenState(ScreenState screenState) { this.screenState = screenState; return this; }
         public Builder setIsLoading(boolean isLoading) { this.isLoading = isLoading; return this; }
-        public Builder setIsPlaying(boolean isPlaying) { this.isPlaying = isPlaying; return this; }
         public Builder setStatusMessage(String statusMessage) { this.statusMessage = statusMessage; return this; }
         public Builder setRenderProgress(int renderProgress) { this.renderProgress = renderProgress; return this; }
         public Builder setFinalVideoPath(String finalVideoPath) { this.finalVideoPath = finalVideoPath; return this; }
