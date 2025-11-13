@@ -75,12 +75,6 @@ public class MainActivity extends AppCompatActivity {
         requestStoragePermission();
     }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        viewModel.stopPlayback(); // Stop playback when the app is paused
-    }
-
     private void setupObservers() {
         viewModel.getUiState().observe(this, uiState -> {
             binding.initialScreenLayout.setVisibility(uiState.screenState == ScreenState.INITIAL ? View.VISIBLE : View.GONE);
@@ -104,13 +98,6 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 binding.textFinalPath.setVisibility(View.GONE);
             }
-
-            // Set play/pause icon
-            binding.navPanel.btnPlayPause.setIconResource(uiState.isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
-
-            // Disable controls during playback
-            setControlsEnabled(!uiState.isPlaying && !uiState.isLoading);
-
 
             if (uiState.screenState == ScreenState.EDITOR && uiState.videoProperties != null) {
                 binding.textVideoInfo.setText(String.format(java.util.Locale.US,
@@ -173,47 +160,10 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void setControlsEnabled(boolean enabled) {
-        // Navigation Buttons
-        binding.navPanel.btnFrameMinus10.setEnabled(enabled);
-        binding.navPanel.btnFrameMinus5.setEnabled(enabled);
-        binding.navPanel.btnFrameMinus1.setEnabled(enabled);
-        binding.navPanel.btnFramePlus1.setEnabled(enabled);
-        binding.navPanel.btnFramePlus5.setEnabled(enabled);
-        binding.navPanel.btnFramePlus10.setEnabled(enabled);
-        binding.navPanel.btnSecMinus10.setEnabled(enabled);
-        binding.navPanel.btnSecMinus5.setEnabled(enabled);
-        binding.navPanel.btnSecMinus1.setEnabled(enabled);
-        binding.navPanel.btnSecPlus1.setEnabled(enabled);
-        binding.navPanel.btnSecPlus5.setEnabled(enabled);
-        binding.navPanel.btnSecPlus10.setEnabled(enabled);
-        binding.navPanel.btnMinMinus10.setEnabled(enabled);
-        binding.navPanel.btnMinMinus5.setEnabled(enabled);
-        binding.navPanel.btnMinMinus1.setEnabled(enabled);
-        binding.navPanel.btnMinPlus1.setEnabled(enabled);
-        binding.navPanel.btnMinPlus5.setEnabled(enabled);
-        binding.navPanel.btnMinPlus10.setEnabled(enabled);
-        binding.navPanel.btnSetStart.setEnabled(enabled);
-        binding.navPanel.btnGoToStart.setEnabled(enabled);
-        binding.navPanel.btnSetEnd.setEnabled(enabled);
-        binding.navPanel.btnGoToEnd.setEnabled(enabled);
-        // Seekbars
-        binding.seekBarFrame.setEnabled(enabled);
-        binding.seekBarPositionX.setEnabled(enabled);
-        binding.seekBarPositionY.setEnabled(enabled);
-        binding.seekBarTimerSize.setEnabled(enabled);
-        binding.seekBarOutlineWidth.setEnabled(enabled);
-        // Render Button
-        binding.btnRender.setEnabled(enabled);
-    }
-
     private void setupListeners() {
         binding.btnSelectVideo.setOnClickListener(v -> videoPickerLauncher.launch("video/*"));
         binding.btnRender.setOnClickListener(v -> viewModel.startRender(this));
         binding.btnSelectFontFile.setOnClickListener(v -> fontPickerLauncher.launch("*/*"));
-
-        // Playback
-        binding.navPanel.btnPlayPause.setOnClickListener(v -> viewModel.togglePlayback(this));
 
         // Navigation Panel
         binding.navPanel.btnSetStart.setOnClickListener(v -> viewModel.setStartFrame());
@@ -227,14 +177,13 @@ public class MainActivity extends AppCompatActivity {
                 if (fromUser) viewModel.updateCurrentFrame(progress);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {
-                viewModel.stopPlayback(); // Stop playback when user touches the seek bar
+                // No action needed now
             }
             @Override public void onStopTrackingTouch(SeekBar seekBar) {
                 viewModel.navigateToFrame(seekBar.getProgress(), MainActivity.this);
             }
         });
 
-        // Debounced Seek Bar Listener (for position, size, etc.)
         SeekBar.OnSeekBarChangeListener debouncedSeekBarListener = new SeekBar.OnSeekBarChangeListener() {
             private Runnable debounceRunnable;
 
@@ -270,7 +219,6 @@ public class MainActivity extends AppCompatActivity {
 
         binding.switchOutline.setOnCheckedChangeListener((buttonView, isChecked) -> viewModel.toggleOutline(isChecked, this));
 
-        // Navigation Buttons
         View.OnClickListener navListener = v -> {
             int id = v.getId();
             if (id == binding.navPanel.btnFrameMinus10.getId()) viewModel.navigateFrames(-10, this);
@@ -292,7 +240,6 @@ public class MainActivity extends AppCompatActivity {
             else if (id == binding.navPanel.btnMinPlus5.getId()) viewModel.navigateMinutes(5, this);
             else if (id == binding.navPanel.btnMinPlus10.getId()) viewModel.navigateMinutes(10, this);
         };
-        // Apply listener to all navigation buttons
         Button[] navButtons = {
                 binding.navPanel.btnFrameMinus10, binding.navPanel.btnFrameMinus5, binding.navPanel.btnFrameMinus1,
                 binding.navPanel.btnFramePlus1, binding.navPanel.btnFramePlus5, binding.navPanel.btnFramePlus10,
@@ -439,4 +386,4 @@ public class MainActivity extends AppCompatActivity {
             case "MMSSmmm": default: return String.format(java.util.Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis);
         }
     }
-        }
+}
