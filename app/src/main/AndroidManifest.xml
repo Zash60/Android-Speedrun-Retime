@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
@@ -9,8 +10,10 @@
         android:icon="@drawable/ic_speedrun_editor"
         android:label="Speedrun Retime"
         android:roundIcon="@drawable/ic_speedrun_editor"
+        android:supportsRtl="true"
         android:theme="@style/Theme.App"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        tools:targetApi="31">
         <activity
             android:name=".MainActivity"
             android:exported="true"
