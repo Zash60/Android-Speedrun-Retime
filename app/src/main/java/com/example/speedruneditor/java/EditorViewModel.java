@@ -8,13 +8,14 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.text.TextPaint;
@@ -37,6 +38,7 @@ import androidx.media3.transformer.ProgressHolder;
 import androidx.media3.transformer.Transformer;
 import com.google.common.collect.ImmutableList;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -73,45 +75,16 @@ public class EditorViewModel extends ViewModel {
         }
     }
 
-    // --- startRender is the only method that has changed significantly ---
-
     public void startRender(Context context) {
         UiState state = _uiState.getValue();
         if (state == null || state.selectedVideoUri == null || state.videoProperties == null || transformer != null) {
             return;
         }
-
         updateState(s -> s.buildUpon().setIsLoading(true).setStatusMessage("Preparing render...").setRenderProgress(0).build());
 
-        final ContentResolver resolver = context.getContentResolver();
-        final ContentValues contentValues = new ContentValues();
-        final String fileName = "render_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4";
-
-        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-        contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4");
-        // Save to the public "Downloads" directory
-        contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-        // Mark file as "pending" so it's not visible until render is complete
-        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 1);
-
-        Uri videoCollection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
-        final Uri finalVideoUri = resolver.insert(videoCollection, contentValues);
-
-        if (finalVideoUri == null) {
-            mainHandler.post(() -> updateState(s -> s.buildUpon().setIsLoading(false).setStatusMessage("Error: Could not create output file in Downloads.").build()));
-            return;
-        }
-
-        final ParcelFileDescriptor pfd;
-        try {
-            pfd = resolver.openFileDescriptor(finalVideoUri, "w");
-            if (pfd == null) throw new IOException("Failed to open ParcelFileDescriptor");
-        } catch (IOException e) {
-            Log.e(TAG, "Could not open file descriptor for MediaStore URI", e);
-            resolver.delete(finalVideoUri, null, null); // Clean up pending entry
-            mainHandler.post(() -> updateState(s -> s.buildUpon().setIsLoading(false).setStatusMessage("Error: File system access denied.").build()));
-            return;
-        }
+        // Step 1: Render to a temporary file in the app's private cache.
+        final String tempFileName = "render_" + System.currentTimeMillis() + ".mp4";
+        final File tempVideoFile = new File(context.getExternalCacheDir(), tempFileName);
 
         MediaItem mediaItem = MediaItem.fromUri(state.selectedVideoUri);
         TextureOverlay timerOverlay = createTimerOverlay();
@@ -122,38 +95,18 @@ public class EditorViewModel extends ViewModel {
                 .addListener(new Transformer.Listener() {
                     @Override
                     public void onCompleted(@NonNull Composition composition, @NonNull ExportResult exportResult) {
-                        try {
-                            pfd.close();
-                        } catch (IOException e) {
-                            Log.e(TAG, "Error closing ParcelFileDescriptor", e);
-                        }
-
-                        // Now that render is complete, "publish" the file by marking it as not pending.
-                        contentValues.clear();
-                        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
-                        resolver.update(finalVideoUri, contentValues, null, null);
-
-                        mainHandler.post(() -> {
-                            updateState(s -> s.buildUpon()
-                                    .setIsLoading(false)
-                                    .setStatusMessage("Render Complete!")
-                                    .setFinalVideoPath("Downloads/" + fileName) // Show user-friendly path
-                                    .build());
-                            transformer = null;
-                        });
+                        // Step 2: Once render is complete, copy the temporary file to the public Downloads folder.
+                        copyFileToDownloads(context, tempVideoFile);
+                        transformer = null;
                     }
 
                     @Override
                     public void onError(@NonNull Composition composition, @NonNull ExportResult exportResult, @NonNull ExportException exportException) {
-                        try {
-                            pfd.close();
-                        } catch (IOException e) {
-                            Log.e(TAG, "Error closing ParcelFileDescriptor on error", e);
-                        }
-                        // If an error occurred, delete the pending file from MediaStore
-                        resolver.delete(finalVideoUri, null, null);
-
                         Log.e(TAG, "Transformer error", exportException);
+                        // Clean up the temporary file if it exists
+                        if (tempVideoFile.exists()) {
+                            tempVideoFile.delete();
+                        }
                         mainHandler.post(() -> {
                             updateState(s -> s.buildUpon()
                                     .setIsLoading(false)
@@ -165,8 +118,8 @@ public class EditorViewModel extends ViewModel {
                 })
                 .build();
 
-        // Start the transformation, writing to the ParcelFileDescriptor
-        transformer.start(editedMediaItem, pfd);
+        // Start the transformation, writing to the temporary file's path (String), which is a supported method.
+        transformer.start(editedMediaItem, tempVideoFile.getAbsolutePath());
 
         mainHandler.post(new Runnable() {
             @Override
@@ -183,6 +136,111 @@ public class EditorViewModel extends ViewModel {
         });
     }
 
+    private void copyFileToDownloads(Context context, File sourceFile) {
+        mainHandler.post(() -> updateState(s -> s.buildUpon().setStatusMessage("Saving to Downloads...").build()));
+
+        ContentResolver resolver = context.getContentResolver();
+        ContentValues contentValues = new ContentValues();
+        String fileName = "render_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4";
+        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+        contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4");
+        contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+
+        Uri videoCollection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        Uri newVideoUri = resolver.insert(videoCollection, contentValues);
+
+        if (newVideoUri != null) {
+            try (OutputStream out = resolver.openOutputStream(newVideoUri);
+                 InputStream in = new FileInputStream(sourceFile)) {
+                if (out != null) {
+                    byte[] buf = new byte[8192];
+                    int len;
+                    while ((len = in.read(buf)) > 0) {
+                        out.write(buf, 0, len);
+                    }
+                    mainHandler.post(() -> updateState(s -> s.buildUpon()
+                            .setIsLoading(false)
+                            .setStatusMessage("Render Complete!")
+                            .setFinalVideoPath("Downloads/" + fileName)
+                            .build()));
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Error copying file to Downloads", e);
+                mainHandler.post(() -> updateState(s -> s.buildUpon().setIsLoading(false).setStatusMessage("Error saving file.").build()));
+            }
+        }
+        // Clean up the temporary file
+        sourceFile.delete();
+    }
+
+    public void loadVideoFromUri(Uri uri, Context context) {
+        updateState(currentState -> currentState.buildUpon().setIsLoading(true).setStatusMessage("Analyzing video...").build());
+        executor.execute(() -> {
+            MediaExtractor extractor = new MediaExtractor();
+            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+            try {
+                extractor.setDataSource(context, uri, null);
+                retriever.setDataSource(context, uri);
+
+                MediaFormat format = null;
+                for (int i = 0; i < extractor.getTrackCount(); i++) {
+                    MediaFormat trackFormat = extractor.getTrackFormat(i);
+                    String mime = trackFormat.getString(MediaFormat.KEY_MIME);
+                    if (mime != null && mime.startsWith("video/")) {
+                        format = trackFormat;
+                        break;
+                    }
+                }
+                if (format == null) throw new IOException("No video track found.");
+
+                int width = format.getInteger(MediaFormat.KEY_WIDTH);
+                int height = format.getInteger(MediaFormat.KEY_HEIGHT);
+                double duration = format.getLong(MediaFormat.KEY_DURATION) / 1_000_000.0;
+
+                double fps = 30.0; // Default fallback
+                if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
+                    fps = format.getInteger(MediaFormat.KEY_FRAME_RATE);
+                } else {
+                    // Fallback for variable frame rate videos
+                    String frameCountStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT);
+                    if (frameCountStr != null && duration > 0) {
+                        fps = Integer.parseInt(frameCountStr) / duration;
+                    }
+                }
+
+                VideoProperties props = new VideoProperties(width, height, fps, duration);
+                int totalFrames = (int) (props.duration * props.fps);
+
+                mainHandler.post(() -> {
+                    updateState(currentState -> currentState.buildUpon()
+                            .setIsLoading(false)
+                            .setScreenState(ScreenState.EDITOR)
+                            .setSelectedVideoUri(uri)
+                            .setVideoProperties(props)
+                            .setEndFrame(totalFrames)
+                            .setStatusMessage("Video loaded: " + props.width + "x" + props.height)
+                            .build()
+                    );
+                    navigateToFrame(0, context);
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading video", e);
+                mainHandler.post(() -> updateState(currentState -> currentState.buildUpon()
+                        .setIsLoading(false)
+                        .setStatusMessage("Error loading: " + e.getMessage())
+                        .build())
+                );
+            } finally {
+                extractor.release();
+                try {
+                    retriever.release();
+                } catch (IOException e) {
+                   Log.e(TAG, "Failed to release retriever", e);
+                }
+            }
+        });
+    }
 
     // --- Other methods remain the same ---
 
@@ -243,50 +301,6 @@ public class EditorViewModel extends ViewModel {
             }
         }
         return result;
-    }
-
-    public void loadVideoFromUri(Uri uri, Context context) {
-        updateState(currentState -> currentState.buildUpon().setIsLoading(true).setStatusMessage("Analyzing video...").build());
-        executor.execute(() -> {
-            try (MediaMetadataRetriever retriever = new MediaMetadataRetriever()) {
-                retriever.setDataSource(context, uri);
-                String widthStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
-                String heightStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
-                String durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-                String frameRateStr = null;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    frameRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_RATE);
-                }
-                if (widthStr == null || heightStr == null || durationStr == null) {
-                    throw new IOException("Could not extract video metadata.");
-                }
-                int width = Integer.parseInt(widthStr);
-                int height = Integer.parseInt(heightStr);
-                double duration = Long.parseLong(durationStr) / 1000.0;
-                double fps = (frameRateStr != null) ? Double.parseDouble(frameRateStr) : 30.0;
-                VideoProperties props = new VideoProperties(width, height, fps, duration);
-                int totalFrames = (int) (props.duration * props.fps);
-                mainHandler.post(() -> {
-                    updateState(currentState -> currentState.buildUpon()
-                            .setIsLoading(false)
-                            .setScreenState(ScreenState.EDITOR)
-                            .setSelectedVideoUri(uri)
-                            .setVideoProperties(props)
-                            .setEndFrame(totalFrames)
-                            .setStatusMessage("Video loaded: " + props.width + "x" + props.height)
-                            .build()
-                    );
-                    navigateToFrame(0, context);
-                });
-            } catch (Exception e) {
-                Log.e(TAG, "Error loading video", e);
-                mainHandler.post(() -> updateState(currentState -> currentState.buildUpon()
-                        .setIsLoading(false)
-                        .setStatusMessage("Error loading: " + e.getMessage())
-                        .build())
-                );
-            }
-        });
     }
 
     private void fetchFrameForPreview(int frame, Context context) {
@@ -528,4 +542,4 @@ public class EditorViewModel extends ViewModel {
             mainHandler.post(() -> _uiState.setValue(updater.update(currentState)));
         }
     }
-                    }
+    }
