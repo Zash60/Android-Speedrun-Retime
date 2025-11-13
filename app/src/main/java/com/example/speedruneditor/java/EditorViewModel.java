@@ -66,10 +66,17 @@ public class EditorViewModel extends ViewModel {
     private Transformer transformer;
     private final AtomicBoolean isFetchingFrame = new AtomicBoolean(false);
 
+    // Handler for playback functionality
+    private final Handler playbackHandler = new Handler(Looper.getMainLooper());
+    private Runnable playbackRunnable;
+    private long lastPreviewUpdateTime = 0;
+    private static final long PREVIEW_UPDATE_INTERVAL_MS = 250; // Update preview image 4 times a second
+
     @Override
     protected void onCleared() {
         super.onCleared();
         executor.shutdown();
+        stopPlayback();
         if (transformer != null) {
             transformer.cancel();
         }
@@ -80,6 +87,7 @@ public class EditorViewModel extends ViewModel {
         if (state == null || state.selectedVideoUri == null || state.videoProperties == null || transformer != null) {
             return;
         }
+        stopPlayback(); // Stop playback before rendering
         updateState(s -> s.buildUpon().setIsLoading(true).setStatusMessage("Preparing render...").setRenderProgress(0).build());
 
         // Step 1: Render to a temporary file in the app's private cache.
@@ -95,8 +103,8 @@ public class EditorViewModel extends ViewModel {
                 .addListener(new Transformer.Listener() {
                     @Override
                     public void onCompleted(@NonNull Composition composition, @NonNull ExportResult exportResult) {
-                        // Step 2: Once render is complete, copy the temporary file to the public Downloads folder.
-                        copyFileToDownloads(context, tempVideoFile);
+                        // Step 2: Once render is complete, copy the temporary file to the public folder.
+                        copyFileToPublicFolder(context, tempVideoFile);
                         transformer = null;
                     }
 
@@ -118,7 +126,7 @@ public class EditorViewModel extends ViewModel {
                 })
                 .build();
 
-        // Start the transformation, writing to the temporary file's path (String), which is a supported method.
+        // Start the transformation, writing to the temporary file's path (String).
         transformer.start(editedMediaItem, tempVideoFile.getAbsolutePath());
 
         mainHandler.post(new Runnable() {
@@ -136,15 +144,16 @@ public class EditorViewModel extends ViewModel {
         });
     }
 
-    private void copyFileToDownloads(Context context, File sourceFile) {
-        mainHandler.post(() -> updateState(s -> s.buildUpon().setStatusMessage("Saving to Downloads...").build()));
+    private void copyFileToPublicFolder(Context context, File sourceFile) {
+        mainHandler.post(() -> updateState(s -> s.buildUpon().setStatusMessage("Saving to Movies folder...").build()));
 
         ContentResolver resolver = context.getContentResolver();
         ContentValues contentValues = new ContentValues();
         String fileName = "render_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4";
         contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
         contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4");
-        contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+        // FIX: Use DIRECTORY_MOVIES for video files as per Scoped Storage rules.
+        contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_MOVIES);
 
         Uri videoCollection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
         Uri newVideoUri = resolver.insert(videoCollection, contentValues);
@@ -161,17 +170,73 @@ public class EditorViewModel extends ViewModel {
                     mainHandler.post(() -> updateState(s -> s.buildUpon()
                             .setIsLoading(false)
                             .setStatusMessage("Render Complete!")
-                            .setFinalVideoPath("Downloads/" + fileName)
+                            .setFinalVideoPath("Movies/" + fileName)
                             .build()));
                 }
             } catch (IOException e) {
-                Log.e(TAG, "Error copying file to Downloads", e);
+                Log.e(TAG, "Error copying file to Movies folder", e);
                 mainHandler.post(() -> updateState(s -> s.buildUpon().setIsLoading(false).setStatusMessage("Error saving file.").build()));
             }
         }
         // Clean up the temporary file
         sourceFile.delete();
     }
+
+    // --- Playback Logic ---
+
+    public void togglePlayback(Context context) {
+        UiState state = _uiState.getValue();
+        if (state == null || state.videoProperties == null) return;
+
+        if (state.isPlaying) {
+            stopPlayback();
+        } else {
+            startPlayback(context);
+        }
+    }
+
+    private void stopPlayback() {
+        playbackHandler.removeCallbacksAndMessages(null); // Stop any pending playback tasks
+        updateState(s -> s.buildUpon().setIsPlaying(false).build());
+    }
+
+    private void startPlayback(Context context) {
+        UiState state = _uiState.getValue();
+        if (state == null || state.videoProperties == null || state.isPlaying) return;
+
+        updateState(s -> s.buildUpon().setIsPlaying(true).build());
+
+        final long frameDurationMs = (long) (1000 / state.videoProperties.fps);
+
+        playbackRunnable = new Runnable() {
+            @Override
+            public void run() {
+                UiState currentState = _uiState.getValue();
+                if (currentState == null || !currentState.isPlaying) return;
+
+                int nextFrame = currentState.currentFrame + 1;
+                // Stop if we reach the end of the video or the user-defined end frame
+                if (nextFrame >= (int)(currentState.videoProperties.duration * currentState.videoProperties.fps) || nextFrame > currentState.endFrame) {
+                    stopPlayback();
+                    return;
+                }
+
+                // Update UI state with new frame (cheap operation)
+                updateState(s -> s.buildUpon().setCurrentFrame(nextFrame).build());
+
+                // Update preview bitmap periodically (expensive operation)
+                long now = System.currentTimeMillis();
+                if (now - lastPreviewUpdateTime > PREVIEW_UPDATE_INTERVAL_MS) {
+                    lastPreviewUpdateTime = now;
+                    fetchFrameForPreview(nextFrame, context);
+                }
+
+                playbackHandler.postDelayed(this, frameDurationMs);
+            }
+        };
+        playbackHandler.post(playbackRunnable);
+    }
+
 
     public void loadVideoFromUri(Uri uri, Context context) {
         updateState(currentState -> currentState.buildUpon().setIsLoading(true).setStatusMessage("Analyzing video...").build());
@@ -241,8 +306,6 @@ public class EditorViewModel extends ViewModel {
             }
         });
     }
-
-    // --- Other methods remain the same ---
 
     public void loadCustomFont(Uri uri, Context context) {
         updateState(s -> s.buildUpon().setStatusMessage("Importing font...").build());
@@ -542,4 +605,4 @@ public class EditorViewModel extends ViewModel {
             mainHandler.post(() -> _uiState.setValue(updater.update(currentState)));
         }
     }
-    }
+        }
