@@ -65,16 +65,10 @@ public class EditorViewModel extends ViewModel {
     private Transformer transformer;
     private final AtomicBoolean isFetchingFrame = new AtomicBoolean(false);
 
-    private final Handler playbackHandler = new Handler(Looper.getMainLooper());
-    private Runnable playbackRunnable;
-    private long lastPreviewUpdateTime = 0;
-    private static final long PREVIEW_UPDATE_INTERVAL_MS = 250;
-
     @Override
     protected void onCleared() {
         super.onCleared();
         executor.shutdown();
-        stopPlayback();
         if (transformer != null) {
             transformer.cancel();
         }
@@ -85,7 +79,6 @@ public class EditorViewModel extends ViewModel {
         if (state == null || state.selectedVideoUri == null || state.videoProperties == null || transformer != null) {
             return;
         }
-        stopPlayback();
         updateState(s -> s.buildUpon().setIsLoading(true).setStatusMessage("Preparing render...").setRenderProgress(0).build());
 
         final String tempFileName = "render_" + System.currentTimeMillis() + ".mp4";
@@ -174,48 +167,6 @@ public class EditorViewModel extends ViewModel {
         if (sourceFile.exists()) {
             sourceFile.delete();
         }
-    }
-
-    public void togglePlayback(Context context) {
-        UiState state = _uiState.getValue();
-        if (state == null || state.videoProperties == null) return;
-        if (state.isPlaying) {
-            stopPlayback();
-        } else {
-            startPlayback(context);
-        }
-    }
-
-    public void stopPlayback() {
-        playbackHandler.removeCallbacksAndMessages(null);
-        updateState(s -> s.buildUpon().setIsPlaying(false).build());
-    }
-
-    private void startPlayback(Context context) {
-        UiState state = _uiState.getValue();
-        if (state == null || state.videoProperties == null || state.isPlaying) return;
-        updateState(s -> s.buildUpon().setIsPlaying(true).build());
-        final long frameDurationMs = (long) (1000 / state.videoProperties.fps);
-        playbackRunnable = new Runnable() {
-            @Override
-            public void run() {
-                UiState currentState = _uiState.getValue();
-                if (currentState == null || !currentState.isPlaying) return;
-                int nextFrame = currentState.currentFrame + 1;
-                if (nextFrame >= (int)(currentState.videoProperties.duration * currentState.videoProperties.fps) || nextFrame > currentState.endFrame) {
-                    stopPlayback();
-                    return;
-                }
-                updateState(s -> s.buildUpon().setCurrentFrame(nextFrame).build());
-                long now = System.currentTimeMillis();
-                if (now - lastPreviewUpdateTime > PREVIEW_UPDATE_INTERVAL_MS) {
-                    lastPreviewUpdateTime = now;
-                    fetchFrameForPreview(nextFrame, context);
-                }
-                playbackHandler.postDelayed(this, frameDurationMs);
-            }
-        };
-        playbackHandler.post(playbackRunnable);
     }
 
     public void loadVideoFromUri(Uri uri, Context context) {
@@ -584,4 +535,4 @@ public class EditorViewModel extends ViewModel {
             mainHandler.post(() -> _uiState.setValue(updater.update(currentState)));
         }
     }
-                    }
+}
