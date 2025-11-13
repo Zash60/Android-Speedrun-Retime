@@ -12,7 +12,6 @@ import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
@@ -66,11 +65,10 @@ public class EditorViewModel extends ViewModel {
     private Transformer transformer;
     private final AtomicBoolean isFetchingFrame = new AtomicBoolean(false);
 
-    // Handler for playback functionality
     private final Handler playbackHandler = new Handler(Looper.getMainLooper());
     private Runnable playbackRunnable;
     private long lastPreviewUpdateTime = 0;
-    private static final long PREVIEW_UPDATE_INTERVAL_MS = 250; // Update preview image 4 times a second
+    private static final long PREVIEW_UPDATE_INTERVAL_MS = 250;
 
     @Override
     protected void onCleared() {
@@ -87,10 +85,9 @@ public class EditorViewModel extends ViewModel {
         if (state == null || state.selectedVideoUri == null || state.videoProperties == null || transformer != null) {
             return;
         }
-        stopPlayback(); // Stop playback before rendering
+        stopPlayback();
         updateState(s -> s.buildUpon().setIsLoading(true).setStatusMessage("Preparing render...").setRenderProgress(0).build());
 
-        // Step 1: Render to a temporary file in the app's private cache.
         final String tempFileName = "render_" + System.currentTimeMillis() + ".mp4";
         final File tempVideoFile = new File(context.getExternalCacheDir(), tempFileName);
 
@@ -103,7 +100,6 @@ public class EditorViewModel extends ViewModel {
                 .addListener(new Transformer.Listener() {
                     @Override
                     public void onCompleted(@NonNull Composition composition, @NonNull ExportResult exportResult) {
-                        // Step 2: Once render is complete, copy the temporary file to the public folder.
                         copyFileToPublicFolder(context, tempVideoFile);
                         transformer = null;
                     }
@@ -111,7 +107,6 @@ public class EditorViewModel extends ViewModel {
                     @Override
                     public void onError(@NonNull Composition composition, @NonNull ExportResult exportResult, @NonNull ExportException exportException) {
                         Log.e(TAG, "Transformer error", exportException);
-                        // Clean up the temporary file if it exists
                         if (tempVideoFile.exists()) {
                             tempVideoFile.delete();
                         }
@@ -126,7 +121,6 @@ public class EditorViewModel extends ViewModel {
                 })
                 .build();
 
-        // Start the transformation, writing to the temporary file's path (String).
         transformer.start(editedMediaItem, tempVideoFile.getAbsolutePath());
 
         mainHandler.post(new Runnable() {
@@ -177,18 +171,14 @@ public class EditorViewModel extends ViewModel {
                 mainHandler.post(() -> updateState(s -> s.buildUpon().setIsLoading(false).setStatusMessage("Error saving file.").build()));
             }
         }
-        // Clean up the temporary file
         if (sourceFile.exists()) {
             sourceFile.delete();
         }
     }
 
-    // --- Playback Logic ---
-
     public void togglePlayback(Context context) {
         UiState state = _uiState.getValue();
         if (state == null || state.videoProperties == null) return;
-
         if (state.isPlaying) {
             stopPlayback();
         } else {
@@ -197,41 +187,31 @@ public class EditorViewModel extends ViewModel {
     }
 
     public void stopPlayback() {
-        playbackHandler.removeCallbacksAndMessages(null); // Stop any pending playback tasks
+        playbackHandler.removeCallbacksAndMessages(null);
         updateState(s -> s.buildUpon().setIsPlaying(false).build());
     }
 
     private void startPlayback(Context context) {
         UiState state = _uiState.getValue();
         if (state == null || state.videoProperties == null || state.isPlaying) return;
-
         updateState(s -> s.buildUpon().setIsPlaying(true).build());
-
         final long frameDurationMs = (long) (1000 / state.videoProperties.fps);
-
         playbackRunnable = new Runnable() {
             @Override
             public void run() {
                 UiState currentState = _uiState.getValue();
                 if (currentState == null || !currentState.isPlaying) return;
-
                 int nextFrame = currentState.currentFrame + 1;
-                // Stop if we reach the end of the video or the user-defined end frame
                 if (nextFrame >= (int)(currentState.videoProperties.duration * currentState.videoProperties.fps) || nextFrame > currentState.endFrame) {
                     stopPlayback();
                     return;
                 }
-
-                // Update UI state with new frame (cheap operation)
                 updateState(s -> s.buildUpon().setCurrentFrame(nextFrame).build());
-
-                // Update preview bitmap periodically (expensive operation)
                 long now = System.currentTimeMillis();
                 if (now - lastPreviewUpdateTime > PREVIEW_UPDATE_INTERVAL_MS) {
                     lastPreviewUpdateTime = now;
                     fetchFrameForPreview(nextFrame, context);
                 }
-
                 playbackHandler.postDelayed(this, frameDurationMs);
             }
         };
@@ -262,11 +242,10 @@ public class EditorViewModel extends ViewModel {
                 int height = format.getInteger(MediaFormat.KEY_HEIGHT);
                 double duration = format.getLong(MediaFormat.KEY_DURATION) / 1_000_000.0;
 
-                double fps = 30.0; // Default fallback
+                double fps = 30.0;
                 if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
                     fps = format.getInteger(MediaFormat.KEY_FRAME_RATE);
                 } else {
-                    // Fallback for variable frame rate videos
                     String frameCountStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT);
                     if (frameCountStr != null && duration > 0) {
                         fps = Integer.parseInt(frameCountStr) / duration;
@@ -605,4 +584,4 @@ public class EditorViewModel extends ViewModel {
             mainHandler.post(() -> _uiState.setValue(updater.update(currentState)));
         }
     }
-    }
+                    }
