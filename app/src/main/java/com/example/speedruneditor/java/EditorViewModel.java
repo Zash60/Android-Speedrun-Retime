@@ -1,18 +1,21 @@
 package com.example.speedruneditor.java;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Typeface;
-import android.media.MediaExtractor;
-import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.text.TextPaint;
 import android.util.Log;
@@ -70,23 +73,132 @@ public class EditorViewModel extends ViewModel {
         }
     }
 
+    // --- startRender is the only method that has changed significantly ---
+
+    public void startRender(Context context) {
+        UiState state = _uiState.getValue();
+        if (state == null || state.selectedVideoUri == null || state.videoProperties == null || transformer != null) {
+            return;
+        }
+
+        updateState(s -> s.buildUpon().setIsLoading(true).setStatusMessage("Preparing render...").setRenderProgress(0).build());
+
+        final ContentResolver resolver = context.getContentResolver();
+        final ContentValues contentValues = new ContentValues();
+        final String fileName = "render_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4";
+
+        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+        contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4");
+        // Save to the public "Downloads" directory
+        contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+        // Mark file as "pending" so it's not visible until render is complete
+        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 1);
+
+        Uri videoCollection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        final Uri finalVideoUri = resolver.insert(videoCollection, contentValues);
+
+        if (finalVideoUri == null) {
+            mainHandler.post(() -> updateState(s -> s.buildUpon().setIsLoading(false).setStatusMessage("Error: Could not create output file in Downloads.").build()));
+            return;
+        }
+
+        final ParcelFileDescriptor pfd;
+        try {
+            pfd = resolver.openFileDescriptor(finalVideoUri, "w");
+            if (pfd == null) throw new IOException("Failed to open ParcelFileDescriptor");
+        } catch (IOException e) {
+            Log.e(TAG, "Could not open file descriptor for MediaStore URI", e);
+            resolver.delete(finalVideoUri, null, null); // Clean up pending entry
+            mainHandler.post(() -> updateState(s -> s.buildUpon().setIsLoading(false).setStatusMessage("Error: File system access denied.").build()));
+            return;
+        }
+
+        MediaItem mediaItem = MediaItem.fromUri(state.selectedVideoUri);
+        TextureOverlay timerOverlay = createTimerOverlay();
+        Effects effects = new Effects(Collections.emptyList(), ImmutableList.of(new OverlayEffect(ImmutableList.of(timerOverlay))));
+        EditedMediaItem editedMediaItem = new EditedMediaItem.Builder(mediaItem).setEffects(effects).build();
+
+        transformer = new Transformer.Builder(context)
+                .addListener(new Transformer.Listener() {
+                    @Override
+                    public void onCompleted(@NonNull Composition composition, @NonNull ExportResult exportResult) {
+                        try {
+                            pfd.close();
+                        } catch (IOException e) {
+                            Log.e(TAG, "Error closing ParcelFileDescriptor", e);
+                        }
+
+                        // Now that render is complete, "publish" the file by marking it as not pending.
+                        contentValues.clear();
+                        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                        resolver.update(finalVideoUri, contentValues, null, null);
+
+                        mainHandler.post(() -> {
+                            updateState(s -> s.buildUpon()
+                                    .setIsLoading(false)
+                                    .setStatusMessage("Render Complete!")
+                                    .setFinalVideoPath("Downloads/" + fileName) // Show user-friendly path
+                                    .build());
+                            transformer = null;
+                        });
+                    }
+
+                    @Override
+                    public void onError(@NonNull Composition composition, @NonNull ExportResult exportResult, @NonNull ExportException exportException) {
+                        try {
+                            pfd.close();
+                        } catch (IOException e) {
+                            Log.e(TAG, "Error closing ParcelFileDescriptor on error", e);
+                        }
+                        // If an error occurred, delete the pending file from MediaStore
+                        resolver.delete(finalVideoUri, null, null);
+
+                        Log.e(TAG, "Transformer error", exportException);
+                        mainHandler.post(() -> {
+                            updateState(s -> s.buildUpon()
+                                    .setIsLoading(false)
+                                    .setStatusMessage("Error: " + exportException.getErrorCodeName())
+                                    .build());
+                            transformer = null;
+                        });
+                    }
+                })
+                .build();
+
+        // Start the transformation, writing to the ParcelFileDescriptor
+        transformer.start(editedMediaItem, pfd);
+
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (transformer != null) {
+                    ProgressHolder progressHolder = new ProgressHolder();
+                    if (transformer.getProgress(progressHolder) != Transformer.PROGRESS_STATE_NO_TRANSFORMATION) {
+                        final int progress = progressHolder.progress;
+                        mainHandler.post(() -> updateState(s -> s.buildUpon().setRenderProgress(progress).setStatusMessage("Rendering... " + progress + "%").build()));
+                    }
+                    mainHandler.postDelayed(this, 500);
+                }
+            }
+        });
+    }
+
+
+    // --- Other methods remain the same ---
+
     public void loadCustomFont(Uri uri, Context context) {
         updateState(s -> s.buildUpon().setStatusMessage("Importing font...").build());
-
         executor.execute(() -> {
             File fontsDir = new File(context.getFilesDir(), "fonts");
             if (!fontsDir.exists()) {
                 fontsDir.mkdirs();
             }
-
             String fileName = getFileNameFromUri(context, uri);
             if (fileName == null) {
                 fileName = "custom_font_" + System.currentTimeMillis();
             }
-
             final String finalFileName = fileName;
             File finalFontFile = new File(fontsDir, finalFileName);
-
             try (InputStream inputStream = context.getContentResolver().openInputStream(uri);
                  OutputStream outputStream = new FileOutputStream(finalFontFile)) {
                 byte[] buffer = new byte[1024];
@@ -135,11 +247,9 @@ public class EditorViewModel extends ViewModel {
 
     public void loadVideoFromUri(Uri uri, Context context) {
         updateState(currentState -> currentState.buildUpon().setIsLoading(true).setStatusMessage("Analyzing video...").build());
-
         executor.execute(() -> {
             try (MediaMetadataRetriever retriever = new MediaMetadataRetriever()) {
                 retriever.setDataSource(context, uri);
-
                 String widthStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
                 String heightStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
                 String durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
@@ -147,19 +257,15 @@ public class EditorViewModel extends ViewModel {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     frameRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_RATE);
                 }
-
                 if (widthStr == null || heightStr == null || durationStr == null) {
                     throw new IOException("Could not extract video metadata.");
                 }
-
                 int width = Integer.parseInt(widthStr);
                 int height = Integer.parseInt(heightStr);
                 double duration = Long.parseLong(durationStr) / 1000.0;
                 double fps = (frameRateStr != null) ? Double.parseDouble(frameRateStr) : 30.0;
-
                 VideoProperties props = new VideoProperties(width, height, fps, duration);
                 int totalFrames = (int) (props.duration * props.fps);
-
                 mainHandler.post(() -> {
                     updateState(currentState -> currentState.buildUpon()
                             .setIsLoading(false)
@@ -172,7 +278,6 @@ public class EditorViewModel extends ViewModel {
                     );
                     navigateToFrame(0, context);
                 });
-
             } catch (Exception e) {
                 Log.e(TAG, "Error loading video", e);
                 mainHandler.post(() -> updateState(currentState -> currentState.buildUpon()
@@ -184,24 +289,19 @@ public class EditorViewModel extends ViewModel {
         });
     }
 
-
     private void fetchFrameForPreview(int frame, Context context) {
         if (!isFetchingFrame.compareAndSet(false, true)) {
             return;
         }
-
         executor.execute(() -> {
             try {
                 UiState currentState = _uiState.getValue();
                 if (currentState == null || currentState.selectedVideoUri == null || currentState.videoProperties == null)
                     return;
-
                 long timeUs = (long) (frame / currentState.videoProperties.fps * 1_000_000);
-
                 try (MediaMetadataRetriever retriever = new MediaMetadataRetriever()) {
                     retriever.setDataSource(context, currentState.selectedVideoUri);
                     Bitmap rawBitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST);
-
                     if (rawBitmap != null) {
                         Bitmap finalBitmap = drawTimerOnBitmap(rawBitmap, frame, currentState);
                         mainHandler.post(() -> {
@@ -221,90 +321,23 @@ public class EditorViewModel extends ViewModel {
         });
     }
 
-    public void startRender(Context context) {
-        UiState state = _uiState.getValue();
-        if (state == null || state.selectedVideoUri == null || state.videoProperties == null || transformer != null)
-            return;
-
-        updateState(s -> s.buildUpon().setIsLoading(true).setStatusMessage("Starting render...").setRenderProgress(0).build());
-
-        File outputDir = new File(context.getExternalFilesDir(null), "SpeedrunEditor");
-        outputDir.mkdirs();
-        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-        File finalVideoFile = new File(outputDir, "render_" + timestamp + ".mp4");
-
-        MediaItem mediaItem = MediaItem.fromUri(state.selectedVideoUri);
-
-        TextureOverlay timerOverlay = createTimerOverlay();
-        Effects effects = new Effects(Collections.emptyList(), ImmutableList.of(new OverlayEffect(ImmutableList.of(timerOverlay))));
-        EditedMediaItem editedMediaItem = new EditedMediaItem.Builder(mediaItem).setEffects(effects).build();
-
-        transformer = new Transformer.Builder(context)
-                .addListener(new Transformer.Listener() {
-                    @Override
-                    public void onCompleted(@NonNull Composition composition, @NonNull ExportResult exportResult) {
-                        mainHandler.post(() -> {
-                            updateState(s -> s.buildUpon()
-                                    .setIsLoading(false)
-                                    .setStatusMessage("Render Complete!")
-                                    .setFinalVideoPath(finalVideoFile.getAbsolutePath())
-                                    .build());
-                            transformer = null;
-                        });
-                    }
-
-                    @Override
-                    public void onError(@NonNull Composition composition, @NonNull ExportResult exportResult, @NonNull ExportException exportException) {
-                        Log.e(TAG, "Transformer error", exportException);
-                        mainHandler.post(() -> {
-                            updateState(s -> s.buildUpon()
-                                    .setIsLoading(false)
-                                    .setStatusMessage("Error: " + exportException.getErrorCodeName())
-                                    .build());
-                            transformer = null;
-                        });
-                    }
-                })
-                .build();
-
-        transformer.start(editedMediaItem, finalVideoFile.getAbsolutePath());
-
-        mainHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                if (transformer != null) {
-                    ProgressHolder progressHolder = new ProgressHolder();
-                    if (transformer.getProgress(progressHolder) != Transformer.PROGRESS_STATE_NO_TRANSFORMATION) {
-                        final int progress = progressHolder.progress;
-                        mainHandler.post(() -> updateState(s -> s.buildUpon().setRenderProgress(progress).setStatusMessage("Rendering... " + progress + "%").build()));
-                    }
-                    mainHandler.postDelayed(this, 500);
-                }
-            }
-        });
-    }
-
     private void drawTimerOnCanvas(Canvas canvas, String timerText, UiState state) {
         TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         textPaint.setTypeface(state.timerTypeface);
         textPaint.setTextSize(state.timerSize);
         textPaint.setTextAlign(Paint.Align.CENTER);
-
         float x = canvas.getWidth() * state.timerPositionX;
         float y = canvas.getHeight() * state.timerPositionY;
-
         Paint.FontMetrics fm = textPaint.getFontMetrics();
         y -= (fm.descent + fm.ascent) / 2f;
-
         if (state.outlineEnabled && state.outlineWidth > 0) {
             TextPaint outlinePaint = new TextPaint(textPaint);
             outlinePaint.setColor(state.outlineColor);
             outlinePaint.setStyle(Paint.Style.STROKE);
-            outlinePaint.setStrokeWidth(state.outlineWidth * 2); // Stroke is centered, so double the width
+            outlinePaint.setStrokeWidth(state.outlineWidth * 2);
             outlinePaint.setStrokeJoin(Paint.Join.ROUND);
             canvas.drawText(timerText, x, y, outlinePaint);
         }
-
         textPaint.setColor(state.timerColor);
         textPaint.setStyle(Paint.Style.FILL);
         canvas.drawText(timerText, x, y, textPaint);
@@ -314,13 +347,11 @@ public class EditorViewModel extends ViewModel {
         if (state.videoProperties == null) return 0.0;
         double startTime = (double) state.startFrame / state.videoProperties.fps;
         double currentTime;
-
         if (currentFrame > state.endFrame) {
             currentTime = (double) state.endFrame / state.videoProperties.fps;
         } else {
             currentTime = (double) currentFrame / state.videoProperties.fps;
         }
-
         return currentTime - startTime;
     }
 
@@ -329,14 +360,12 @@ public class EditorViewModel extends ViewModel {
         sourceBitmap.recycle();
         Canvas canvas = new Canvas(mutableBitmap);
         String timerText;
-
         if (currentFrame < state.startFrame) {
             timerText = formatTime(0, state.timerFormat);
         } else {
             double elapsedSeconds = calculateElapsedTime(state, currentFrame);
             timerText = formatTime(elapsedSeconds, state.timerFormat);
         }
-
         drawTimerOnCanvas(canvas, timerText, state);
         return mutableBitmap;
     }
@@ -349,7 +378,6 @@ public class EditorViewModel extends ViewModel {
         long seconds = TimeUnit.MILLISECONDS.toSeconds(totalMillis) % 60;
         long millis = totalMillis % 1000;
         long centis = (totalMillis / 10) % 100;
-
         switch (format) {
             case "HHMMSSmmm": return String.format(Locale.US, "%d:%02d:%02d.%03d", hours, minutes, seconds, millis);
             case "SSmmm": return String.format(Locale.US, "%.3f", totalSeconds);
@@ -369,31 +397,21 @@ public class EditorViewModel extends ViewModel {
                 if (state == null || state.videoProperties == null) {
                     return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
                 }
-
-                Bitmap bitmap = Bitmap.createBitmap(
-                        state.videoProperties.width,
-                        state.videoProperties.height,
-                        Bitmap.Config.ARGB_8888
-                );
+                Bitmap bitmap = Bitmap.createBitmap(state.videoProperties.width, state.videoProperties.height, Bitmap.Config.ARGB_8888);
                 Canvas canvas = new Canvas(bitmap);
-
                 double startSeconds = (double) state.startFrame / state.videoProperties.fps;
                 double endSeconds = (double) state.endFrame / state.videoProperties.fps;
                 double currentSeconds = presentationTimeUs / 1_000_000.0;
                 double elapsedSeconds = 0;
-
                 if (currentSeconds >= startSeconds) {
                     elapsedSeconds = Math.min(currentSeconds, endSeconds) - startSeconds;
                 }
-
                 String timerText = formatTime(elapsedSeconds, state.timerFormat);
                 drawTimerOnCanvas(canvas, timerText, state);
                 return bitmap;
             }
         };
     }
-
-    // --- UI State Updaters ---
 
     public void updateCurrentFrame(int frame) {
         UiState s = _uiState.getValue();
@@ -510,4 +528,4 @@ public class EditorViewModel extends ViewModel {
             mainHandler.post(() -> _uiState.setValue(updater.update(currentState)));
         }
     }
-    }
+                    }
