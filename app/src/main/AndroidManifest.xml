@@ -7,9 +7,9 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_speedrun_editor"
+        android:icon="@mipmap/ic_launcher"
         android:label="Speedrun Retime"
-        android:roundIcon="@drawable/ic_speedrun_editor"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.App"
         android:requestLegacyExternalStorage="true"
