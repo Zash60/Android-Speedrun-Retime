@@ -1,6 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -62,53 +62,43 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Frame Navigation -->
+    <!-- Navigation Rows (New Design) -->
     <TextView
+        style="@style/TextAppearance.Material3.LabelSmall"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Frame Navigation"
-        style="@style/TextAppearance.Material3.LabelSmall"
+        android:layout_marginTop="12dp"
         android:gravity="center"
-        android:layout_marginTop="8dp"/>
+        android:text="Fine Navigation" />
+
     <LinearLayout style="@style/Widget.App.NavigationRow">
-        <Button android:id="@+id/btn_frame_minus_10" style="@style/Widget.App.NavigationButton" android:text="-10f" />
-        <Button android:id="@+id/btn_frame_minus_5" style="@style/Widget.App.NavigationButton" android:text="-5f" />
-        <Button android:id="@+id/btn_frame_minus_1" style="@style/Widget.App.NavigationButton" android:text="-1f" />
-        <Button android:id="@+id/btn_frame_plus_1" style="@style/Widget.App.NavigationButton" android:text="+1f" />
-        <Button android:id="@+id/btn_frame_plus_5" style="@style/Widget.App.NavigationButton" android:text="+5f" />
-        <Button android:id="@+id/btn_frame_plus_10" style="@style/Widget.App.NavigationButton" android:text="+10f" />
+        <Button android:id="@+id/btn_frame_minus_10" style="@style/Widget.App.NavigationButton.Small" android:text="-10f" />
+        <Button android:id="@+id/btn_frame_minus_5" style="@style/Widget.App.NavigationButton.Small" android:text="-5f" />
+        <Button android:id="@+id/btn_frame_minus_1" style="@style/Widget.App.NavigationButton" android:text="&lt; -1f" />
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="?attr/dividerHorizontal" android:layout_marginHorizontal="4dp"/>
+        <Button android:id="@+id/btn_frame_plus_1" style="@style/Widget.App.NavigationButton" android:text="+1f >" />
+        <Button android:id="@+id/btn_frame_plus_5" style="@style/Widget.App.NavigationButton.Small" android:text="+5f" />
+        <Button android:id="@+id/btn_frame_plus_10" style="@style/Widget.App.NavigationButton.Small" android:text="+10f" />
     </LinearLayout>
 
-    <!-- Seconds Navigation -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Time Navigation (Seconds)"
-        style="@style/TextAppearance.Material3.LabelSmall"
-        android:gravity="center"/>
     <LinearLayout style="@style/Widget.App.NavigationRow">
-        <Button android:id="@+id/btn_sec_minus_10" style="@style/Widget.App.NavigationButton" android:text="-10s" />
-        <Button android:id="@+id/btn_sec_minus_5" style="@style/Widget.App.NavigationButton" android:text="-5s" />
-        <Button android:id="@+id/btn_sec_minus_1" style="@style/Widget.App.NavigationButton" android:text="-1s" />
-        <Button android:id="@+id/btn_sec_plus_1" style="@style/Widget.App.NavigationButton" android:text="+1s" />
-        <Button android:id="@+id/btn_sec_plus_5" style="@style/Widget.App.NavigationButton" android:text="+5s" />
-        <Button android:id="@+id/btn_sec_plus_10" style="@style/Widget.App.NavigationButton" android:text="+10s" />
+        <Button android:id="@+id/btn_sec_minus_10" style="@style/Widget.App.NavigationButton.Small" android:text="-10s" />
+        <Button android:id="@+id/btn_sec_minus_5" style="@style/Widget.App.NavigationButton.Small" android:text="-5s" />
+        <Button android:id="@+id/btn_sec_minus_1" style="@style/Widget.App.NavigationButton" android:text="&lt; -1s" />
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="?attr/dividerHorizontal" android:layout_marginHorizontal="4dp"/>
+        <Button android:id="@+id/btn_sec_plus_1" style="@style/Widget.App.NavigationButton" android:text="+1s >" />
+        <Button android:id="@+id/btn_sec_plus_5" style="@style/Widget.App.NavigationButton.Small" android:text="+5s" />
+        <Button android:id="@+id/btn_sec_plus_10" style="@style/Widget.App.NavigationButton.Small" android:text="+10s" />
     </LinearLayout>
 
-    <!-- Minutes Navigation -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Time Navigation (Minutes)"
-        style="@style/TextAppearance.Material3.LabelSmall"
-        android:gravity="center"/>
     <LinearLayout style="@style/Widget.App.NavigationRow">
-        <Button android:id="@+id/btn_min_minus_10" style="@style/Widget.App.NavigationButton" android:text="-10m" />
-        <Button android:id="@+id/btn_min_minus_5" style="@style/Widget.App.NavigationButton" android:text="-5m" />
-        <Button android:id="@+id/btn_min_minus_1" style="@style/Widget.App.NavigationButton" android:text="-1m" />
-        <Button android:id="@+id/btn_min_plus_1" style="@style/Widget.App.NavigationButton" android:text="+1m" />
-        <Button android:id="@+id/btn_min_plus_5" style="@style/Widget.App.NavigationButton" android:text="+5m" />
-        <Button android:id="@+id/btn_min_plus_10" style="@style/Widget.App.NavigationButton" android:text="+10m" />
+        <Button android:id="@+id/btn_min_minus_10" style="@style/Widget.App.NavigationButton.Small" android:text="-10m" />
+        <Button android:id="@+id/btn_min_minus_5" style="@style/Widget.App.NavigationButton.Small" android:text="-5m" />
+        <Button android:id="@+id/btn_min_minus_1" style="@style/Widget.App.NavigationButton" android:text="&lt; -1m" />
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="?attr/dividerHorizontal" android:layout_marginHorizontal="4dp"/>
+        <Button android:id="@+id/btn_min_plus_1" style="@style/Widget.App.NavigationButton" android:text="+1m >" />
+        <Button android:id="@+id/btn_min_plus_5" style="@style/Widget.App.NavigationButton.Small" android:text="+5m" />
+        <Button android:id="@+id/btn_min_plus_10" style="@style/Widget.App.NavigationButton.Small" android:text="+10m" />
     </LinearLayout>
 
 </LinearLayout>
