@@ -29,10 +29,11 @@ public class UiState {
     public final int outlineWidth;
     public final int outlineColor;
 
+    // Default initial state
     public UiState() {
         this.screenState = ScreenState.INITIAL;
         this.isLoading = false;
-        this.statusMessage = "Escolha um vídeo do seu dispositivo.";
+        this.statusMessage = "Select a video from your device.";
         this.renderProgress = 0;
         this.finalVideoPath = null;
         this.selectedVideoUri = null;
@@ -53,6 +54,7 @@ public class UiState {
         this.outlineColor = 0xFF000000; // Black
     }
 
+    // Private constructor for the Builder
     private UiState(Builder builder) {
         this.screenState = builder.screenState;
         this.isLoading = builder.isLoading;
