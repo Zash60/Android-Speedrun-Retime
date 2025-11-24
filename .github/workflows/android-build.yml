@@ -1,0 +1,68 @@
+# A human-readable name for the workflow, shown in the "Actions" tab
+name: Manual Android Build
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # The "build" job
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Step 1: Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Sets up the Java Development Kit (JDK) required for Android builds
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Step 3: Set up a SPECIFIC version of Gradle that is compatible with AGP 8.2.2
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.3' # <--- THIS IS THE FIX. Force a compatible version.
+
+      # Step 4: Generate the Gradle Wrapper using the specified Gradle version
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+          
+      # Step 5: Cache Gradle dependencies to speed up future builds
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Step 6: Grant execute permission to the gradlew script
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Step 7: Run the Gradle command to build the debug APK
+      - name: Build debug APK with Gradle
+        run: ./gradlew assembleDebug
+
+      # Step 8: Rename the generated APK to something more descriptive
+      - name: Rename APK
+        run: mv app/build/outputs/apk/debug/app-debug.apk Android-Speedrun-Retime.apk
+
+      # Step 9: Upload the generated APK as a "build artifact"
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Speedrun-Retime-APK
+          path: Android-Speedrun-Retime.apk
+          retention-days: 14
