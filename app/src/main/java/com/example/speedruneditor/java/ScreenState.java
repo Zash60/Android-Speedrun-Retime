@@ -1,6 +1,6 @@
-package com.example.speedruneditor.java;
+package com.example.speedruneditor
 
-public enum ScreenState {
+enum class ScreenState {
     INITIAL,
     EDITOR
 }
