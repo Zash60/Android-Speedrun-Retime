@@ -1,4 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.App" parent="Theme.Material3.Dark" />
-    <style name="Theme.App.NoActionBar" parent="Theme.Material3.Dark.NoActionBar"/>
+    <!-- Tema Base da Aplicação -->
+    <!-- Nota: Usamos Theme.Material3... graças à dependência 'com.google.android.material:material' -->
+    <style name="Theme.App" parent="Theme.Material3.Dark.NoActionBar">
+        <!-- Customize your theme here if needed for the window background etc -->
+        <item name="android:statusBarColor">#000000</item>
+    </style>
 </resources>
