@@ -9,7 +9,6 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
-import android.provider.OpenableColumns
 import android.text.TextPaint
 import android.util.Log
 import androidx.annotation.OptIn
@@ -34,8 +33,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
-import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -43,7 +40,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 @OptIn(UnstableApi::class)
 class EditorViewModel : ViewModel() {
 
-    // Usando StateFlow para Compose
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
@@ -56,22 +52,16 @@ class EditorViewModel : ViewModel() {
     fun toggleLoadMark() {
         _uiState.update { state ->
             if (state.currentLoadStartFrame == null) {
-                // Começar a marcar load
                 state.copy(currentLoadStartFrame = state.currentFrame, statusMessage = "Marking Load... Navigate to end.")
             } else {
-                // Finalizar marcação de load
                 val start = state.currentLoadStartFrame
                 val end = state.currentFrame
-                
-                // Garantir ordem correta
                 val finalStart = minOf(start, end)
                 val finalEnd = maxOf(start, end)
-                
                 val newSegment = LoadSegment(finalStart, finalEnd)
-                val newList = state.loadSegments + newSegment
                 
                 state.copy(
-                    loadSegments = newList,
+                    loadSegments = state.loadSegments + newSegment,
                     currentLoadStartFrame = null,
                     statusMessage = "Load segment added."
                 )
@@ -95,21 +85,16 @@ class EditorViewModel : ViewModel() {
 
     private fun calculateTimes(state: UiState, currentFrame: Int): Pair<Double, Double> {
         val props = state.videoProperties ?: return 0.0 to 0.0
-        
-        // 1. RTA Calculation
         val startFrame = state.startFrame
-        val effectiveCurrentFrame = if (currentFrame < startFrame) startFrame else if (currentFrame > state.endFrame) state.endFrame else currentFrame
+        val effectiveCurrentFrame = currentFrame.coerceIn(startFrame, state.endFrame)
+        
         val rtaFrames = effectiveCurrentFrame - startFrame
         val rtaSeconds = rtaFrames / props.fps
 
-        // 2. LRT Calculation
         var totalLoadFrames = 0
-        
         state.loadSegments.forEach { segment ->
-            // Interseção entre o intervalo atual (startFrame -> effectiveCurrentFrame) e o segmento de load
             val overlapStart = maxOf(startFrame, segment.startFrame)
             val overlapEnd = minOf(effectiveCurrentFrame, segment.endFrame)
-            
             if (overlapEnd > overlapStart) {
                 totalLoadFrames += (overlapEnd - overlapStart)
             }
@@ -136,7 +121,6 @@ class EditorViewModel : ViewModel() {
         val fm = textPaint.fontMetrics
         val lineHeight = (fm.descent - fm.ascent)
         
-        // Determina o que desenhar
         val linesToDraw = mutableListOf<String>()
         if (state.timerMode == TimerMode.RTA || state.timerMode == TimerMode.BOTH) {
             linesToDraw.add(if(state.timerMode == TimerMode.BOTH) "RTA: $rtaText" else rtaText)
@@ -145,11 +129,8 @@ class EditorViewModel : ViewModel() {
             linesToDraw.add(if(state.timerMode == TimerMode.BOTH) "LRT: $lrtText" else lrtText)
         }
 
-        // Centraliza verticalmente o bloco de texto
         val totalHeight = linesToDraw.size * lineHeight
         y -= totalHeight / 2f
-        
-        // Ajuste fino para a baseline da primeira linha
         y += (lineHeight / 2f) - fm.descent
 
         for (line in linesToDraw) {
@@ -165,8 +146,7 @@ class EditorViewModel : ViewModel() {
             textPaint.color = state.timerColor
             textPaint.style = Paint.Style.FILL
             canvas.drawText(line, x, y, textPaint)
-            
-            y += lineHeight // Move para próxima linha
+            y += lineHeight
         }
     }
 
@@ -181,7 +161,6 @@ class EditorViewModel : ViewModel() {
         
         drawTimerOnCanvas(canvas, rtaText, lrtText, state)
         
-        // Se estiver marcando load, desenha um indicador visual
         if (state.currentLoadStartFrame != null) {
             val paint = Paint().apply { 
                 color = Color.RED 
@@ -193,36 +172,7 @@ class EditorViewModel : ViewModel() {
         
         return mutableBitmap
     }
-    
-    // --- PREVIEW & RENDERING ---
 
-    private fun fetchFrameForPreview(frame: Int, context: Context) {
-        if (!isFetchingFrame.compareAndSet(false, true)) return
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val state = _uiState.value
-                if (state.selectedVideoUri != null && state.videoProperties != null) {
-                    val timeUs = (frame / state.videoProperties.fps * 1_000_000).toLong()
-                    MediaMetadataRetriever().use { retriever ->
-                        retriever.setDataSource(context, state.selectedVideoUri)
-                        val rawBitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
-                        if (rawBitmap != null) {
-                            val finalBitmap = drawTimerOnBitmap(rawBitmap, frame, state)
-                            withContext(Dispatchers.Main) {
-                                _uiState.value.currentFrameBitmap?.recycle()
-                                _uiState.update { it.copy(currentFrameBitmap = finalBitmap) }
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("EditorViewModel", "Error preview", e)
-            } finally {
-                isFetchingFrame.set(false)
-            }
-        }
-    }
-    
     private fun createTimerOverlay(): TextureOverlay {
         return object : BitmapOverlay() {
             override fun getBitmap(presentationTimeUs: Long): Bitmap {
@@ -232,9 +182,7 @@ class EditorViewModel : ViewModel() {
                 val bitmap = Bitmap.createBitmap(state.videoProperties.width, state.videoProperties.height, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(bitmap)
 
-                // Converter tempo de apresentação para Frame
                 val currentFrame = (presentationTimeUs / 1_000_000.0 * state.videoProperties.fps).toInt()
-                
                 val (rta, lrt) = calculateTimes(state, currentFrame)
                 drawTimerOnCanvas(canvas, formatTime(rta, state.timerFormat), formatTime(lrt, state.timerFormat), state)
                 return bitmap
@@ -242,25 +190,42 @@ class EditorViewModel : ViewModel() {
         }
     }
 
-    // --- STANDARD OPERATIONS (Migrated) ---
+    // --- STANDARD OPERATIONS ---
 
     fun loadVideoFromUri(uri: Uri, context: Context) {
         _uiState.update { it.copy(isLoading = true, statusMessage = "Analyzing...") }
         viewModelScope.launch(Dispatchers.IO) {
+            val extractor = MediaExtractor()
+            val retriever = MediaMetadataRetriever()
             try {
-                val retriever = MediaMetadataRetriever()
+                extractor.setDataSource(context, uri, null)
                 retriever.setDataSource(context, uri)
-                // (Simpiflicado: Assume que existe vídeo)
-                val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                val widthStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                val heightStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+
+                var format: MediaFormat? = null
+                for (i in 0 until extractor.trackCount) {
+                    val trackFormat = extractor.getTrackFormat(i)
+                    val mime = trackFormat.getString(MediaFormat.KEY_MIME)
+                    if (mime?.startsWith("video/") == true) {
+                        format = trackFormat
+                        break
+                    }
+                }
                 
-                val duration = (durationStr?.toLong() ?: 0) / 1000.0
-                val width = widthStr?.toInt() ?: 1920
-                val height = heightStr?.toInt() ?: 1080
-                
-                // Tenta calcular FPS ou usa padrão
-                val fps = 30.0 // Simplificado para o exemplo, ideal usar a lógica do código anterior
+                if (format == null) throw Exception("No video track")
+
+                val width = format.getInteger(MediaFormat.KEY_WIDTH)
+                val height = format.getInteger(MediaFormat.KEY_HEIGHT)
+                val duration = format.getLong(MediaFormat.KEY_DURATION) / 1_000_000.0
+
+                var fps = 30.0
+                if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
+                    fps = format.getInteger(MediaFormat.KEY_FRAME_RATE).toDouble()
+                } else {
+                    val frameCountStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)
+                    if (frameCountStr != null && duration > 0) {
+                        fps = frameCountStr.toInt() / duration
+                    }
+                }
 
                 val props = VideoProperties(width, height, fps, duration)
                 val totalFrames = (duration * fps).toInt()
@@ -272,7 +237,11 @@ class EditorViewModel : ViewModel() {
                     navigateToFrame(0, context)
                 }
             } catch (e: Exception) {
+                Log.e("EditorViewModel", "Error loading", e)
                 _uiState.update { it.copy(isLoading = false, statusMessage = "Error: ${e.message}") }
+            } finally {
+                extractor.release()
+                retriever.release()
             }
         }
     }
@@ -303,7 +272,6 @@ class EditorViewModel : ViewModel() {
             .build()
         transformer?.start(editedMediaItem, tempFile.absolutePath)
         
-        // Progress Loop
         progressJob = viewModelScope.launch {
             while (isActive && transformer != null) {
                 val holder = ProgressHolder()
@@ -315,9 +283,26 @@ class EditorViewModel : ViewModel() {
         }
     }
 
-    private fun saveToGallery(context: Context, file: File) {
-        // (Mesma lógica de copiar arquivo do código anterior)
-        _uiState.update { it.copy(isLoading = false, statusMessage = "Saved!", finalVideoPath = file.absolutePath) }
+    private fun saveToGallery(context: Context, sourceFile: File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val resolver = context.contentResolver
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "render_${System.currentTimeMillis()}.mp4")
+                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_MOVIES)
+            }
+            val newVideoUri = resolver.insert(MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), contentValues)
+            
+            if (newVideoUri != null) {
+                resolver.openOutputStream(newVideoUri)?.use { out ->
+                    sourceFile.inputStream().use { input -> input.copyTo(out) }
+                }
+                withContext(Dispatchers.Main) {
+                    _uiState.update { it.copy(isLoading = false, statusMessage = "Saved!", finalVideoPath = "Movies") }
+                }
+            }
+            if (sourceFile.exists()) sourceFile.delete()
+        }
     }
 
     // --- NAVIGATION HELPERS ---
@@ -332,6 +317,30 @@ class EditorViewModel : ViewModel() {
         fetchFrameForPreview(clamped, context)
     }
 
+    private fun fetchFrameForPreview(frame: Int, context: Context) {
+        if (!isFetchingFrame.compareAndSet(false, true)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val state = _uiState.value
+                if (state.selectedVideoUri != null && state.videoProperties != null) {
+                    val timeUs = (frame / state.videoProperties.fps * 1_000_000).toLong()
+                    MediaMetadataRetriever().use { retriever ->
+                        retriever.setDataSource(context, state.selectedVideoUri)
+                        val rawBitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                        if (rawBitmap != null) {
+                            val finalBitmap = drawTimerOnBitmap(rawBitmap, frame, state)
+                            withContext(Dispatchers.Main) {
+                                _uiState.value.currentFrameBitmap?.recycle()
+                                _uiState.update { it.copy(currentFrameBitmap = finalBitmap) }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) { Log.e("VM", "Error", e) } 
+            finally { isFetchingFrame.set(false) }
+        }
+    }
+
     fun navigateFrames(delta: Int, context: Context) = navigateToFrame(_uiState.value.currentFrame + delta, context)
     
     fun navigateSeconds(delta: Int, context: Context) {
@@ -342,6 +351,10 @@ class EditorViewModel : ViewModel() {
     fun setStartFrame() { _uiState.update { it.copy(startFrame = it.currentFrame) } }
     fun setEndFrame() { _uiState.update { it.copy(endFrame = it.currentFrame) } }
     
+    // Novas Funções
+    fun goToStartFrame(context: Context) = navigateToFrame(_uiState.value.startFrame, context)
+    fun goToEndFrame(context: Context) = navigateToFrame(_uiState.value.endFrame, context)
+    
     fun updateTimerPositionX(x: Float, ctx: Context) { _uiState.update { it.copy(timerPositionX = x) }; refreshPreview(ctx) }
     fun updateTimerPositionY(y: Float, ctx: Context) { _uiState.update { it.copy(timerPositionY = y) }; refreshPreview(ctx) }
     fun setTimerSize(s: Int, ctx: Context) { _uiState.update { it.copy(timerSize = s) }; refreshPreview(ctx) }
@@ -350,7 +363,6 @@ class EditorViewModel : ViewModel() {
     fun refreshPreview(ctx: Context) = fetchFrameForPreview(_uiState.value.currentFrame, ctx)
     
     private fun formatTime(seconds: Double, format: String): String {
-        // (Use a mesma lógica de formatação do código original)
         val s = maxOf(0.0, seconds)
         val ms = (s * 1000).toLong()
         return String.format(Locale.US, "%d:%02d.%03d", 
