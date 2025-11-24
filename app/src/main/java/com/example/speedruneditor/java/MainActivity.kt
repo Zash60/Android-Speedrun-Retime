@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer // IMPORT ADICIONADO AQUI
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -96,7 +97,6 @@ fun MainScreen(viewModel: EditorViewModel) {
             }
             
             if (state.isLoading) {
-                // Overlay de loading
                 Box(
                     modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
                     contentAlignment = Alignment.Center
@@ -182,7 +182,6 @@ fun VideoPreviewSection(viewModel: EditorViewModel, state: UiState) {
                 .background(Color.Black)
                 .pointerInteropFilter {
                     if (it.action == MotionEvent.ACTION_MOVE || it.action == MotionEvent.ACTION_DOWN) {
-                        // Lógica básica de drag (melhorar se possível com View dimensions reais)
                         viewModel.updateTimerPositionX(it.x / 1000f, context)
                         viewModel.updateTimerPositionY(it.y / 600f, context) 
                     }
@@ -199,7 +198,6 @@ fun VideoPreviewSection(viewModel: EditorViewModel, state: UiState) {
             }
         }
         
-        // Trim Info
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Start Frame: ${state.startFrame}", fontSize = 10.sp, color = Color.Gray)
             Text("End Frame: ${state.endFrame}", fontSize = 10.sp, color = Color.Gray)
@@ -207,7 +205,6 @@ fun VideoPreviewSection(viewModel: EditorViewModel, state: UiState) {
     }
 }
 
-// Formatação auxiliar apenas para o texto de debug acima do video
 fun formatPreviewTime(state: UiState): String {
     val fps = state.videoProperties?.fps ?: 30.0
     val seconds = state.currentFrame / fps
@@ -227,7 +224,6 @@ fun TimelineControls(viewModel: EditorViewModel, state: UiState) {
             modifier = Modifier.height(20.dp)
         )
         
-        // Botoes corrigidos com peso igual
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp), 
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
@@ -267,7 +263,6 @@ fun TimelineControls(viewModel: EditorViewModel, state: UiState) {
 fun NavigationPad(viewModel: EditorViewModel) {
     val context = LocalContext.current
 
-    // Helper para criar linhas de botoes
     @Composable
     fun NavRow(label: String, onMinus10: ()->Unit, onMinus5: ()->Unit, onMinus1: ()->Unit, onPlus1: ()->Unit, onPlus5: ()->Unit, onPlus10: ()->Unit) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -276,7 +271,6 @@ fun NavigationPad(viewModel: EditorViewModel) {
                 SmallNavBtn("-10") { onMinus10() }
                 SmallNavBtn("-5") { onMinus5() }
                 SmallNavBtn("-1") { onMinus1() }
-                // Divisor visual
                 Box(modifier = Modifier.width(1.dp).height(20.dp).background(Color.Gray).align(Alignment.CenterVertically))
                 SmallNavBtn("+1") { onPlus1() }
                 SmallNavBtn("+5") { onPlus5() }
@@ -325,7 +319,6 @@ fun LRTControls(viewModel: EditorViewModel, state: UiState) {
         Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
             Text("Load Removal Tool (LRT)", style = MaterialTheme.typography.titleMedium)
             
-            // Chips para seleção de Modo
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 FilterChip(selected = state.timerMode == TimerMode.RTA, onClick = { viewModel.setTimerMode(TimerMode.RTA) }, label = { Text("RTA") })
                 FilterChip(selected = state.timerMode == TimerMode.LRT, onClick = { viewModel.setTimerMode(TimerMode.LRT) }, label = { Text("LRT") })
@@ -371,7 +364,6 @@ fun AppearanceControls(viewModel: EditorViewModel, state: UiState) {
         uri?.let { viewModel.loadCustomFont(it, context) }
     }
     
-    // Controles de Dialogs e Dropdowns
     var showTimerColorPicker by remember { mutableStateOf(false) }
     var showOutlineColorPicker by remember { mutableStateOf(false) }
     var formatExpanded by remember { mutableStateOf(false) }
@@ -383,7 +375,6 @@ fun AppearanceControls(viewModel: EditorViewModel, state: UiState) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text("Timer Appearance", style = MaterialTheme.typography.titleMedium)
             
-            // --- TIMER FORMAT ---
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Text("Format:", modifier = Modifier.weight(1f))
                 Box {
@@ -404,7 +395,6 @@ fun AppearanceControls(viewModel: EditorViewModel, state: UiState) {
                 }
             }
 
-            // --- FONT ---
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text("Font:", modifier = Modifier.weight(1f))
                 if (state.customFontName != null) {
@@ -417,7 +407,6 @@ fun AppearanceControls(viewModel: EditorViewModel, state: UiState) {
 
             Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-            // --- TEXT SETTINGS ---
             Text("Text Style", fontSize = 12.sp, color = Color.Gray)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Size", fontSize = 12.sp, modifier = Modifier.width(40.dp))
@@ -430,7 +419,6 @@ fun AppearanceControls(viewModel: EditorViewModel, state: UiState) {
                 ColorPreviewBox(state.timerColor) { showTimerColorPicker = true }
             }
 
-            // --- OUTLINE SETTINGS ---
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Outline", fontSize = 12.sp, modifier = Modifier.weight(1f))
                 Switch(
@@ -446,7 +434,7 @@ fun AppearanceControls(viewModel: EditorViewModel, state: UiState) {
                     Slider(
                         value = state.outlineWidth.toFloat(),
                         onValueChange = { viewModel.setOutlineWidth(it.toInt()) },
-                        onValueChangeFinished = { viewModel.refreshPreview(context) }, // Refresh apenas ao soltar para performance
+                        onValueChangeFinished = { viewModel.refreshPreview(context) }, 
                         valueRange = 0f..20f,
                         modifier = Modifier.weight(1f)
                     )
@@ -454,7 +442,6 @@ fun AppearanceControls(viewModel: EditorViewModel, state: UiState) {
                 }
             }
             
-            // --- COLOR PICKERS DIALOGS ---
             if (showTimerColorPicker) {
                 ColorPickerDialog(
                     initialColor = state.timerColor,
@@ -514,7 +501,6 @@ fun ColorPickerDialog(initialColor: Int, onColorSelected: (Int) -> Unit, onDismi
     )
 }
 
-// Extension function para escalar o Switch que não tem parâmetro de tamanho nativo
 fun Modifier.scale(scale: Float): Modifier = this.then(
     Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
 )
