@@ -5,12 +5,19 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 
+// Enums e Classes auxiliares
 enum class ScreenState { INITIAL, EDITOR }
-
 enum class TimerMode { RTA, LRT, BOTH }
-
 data class LoadSegment(val startFrame: Int, val endFrame: Int)
 
+data class VideoProperties(
+    val width: Int,
+    val height: Int,
+    val fps: Double,
+    val duration: Double
+)
+
+// Estado Principal
 data class UiState(
     val screenState: ScreenState = ScreenState.INITIAL,
     val isLoading: Boolean = false,
@@ -28,7 +35,7 @@ data class UiState(
 
     // LRT (Load Removed Time)
     val loadSegments: List<LoadSegment> = emptyList(),
-    val currentLoadStartFrame: Int? = null, // Se != null, estamos marcando um load agora
+    val currentLoadStartFrame: Int? = null,
     
     // Estilo
     val timerMode: TimerMode = TimerMode.RTA,
