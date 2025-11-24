@@ -37,7 +37,6 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: EditorViewModel by viewModels()
     private lateinit var binding: ActivityMainBinding
 
-    // Mapas simples
     private val timerFormatMap = linkedMapOf(
         "M:SS.mmm" to "MMSSmmm",
         "H:MM:SS.mmm" to "HHMMSSmmm",
@@ -54,7 +53,6 @@ class MainActivity : AppCompatActivity() {
         "Serif (Bold)" to Typeface.create(Typeface.SERIF, Typeface.BOLD)
     )
 
-    // Debounce usando Coroutine Job
     private var debounceJob: Job? = null
     private val debounceDelay = 200L
 
@@ -83,11 +81,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupObservers() {
         viewModel.uiState.observe(this) { state ->
-            // Visibilidade das Telas
             binding.initialScreenLayout.isVisible = state.screenState == ScreenState.INITIAL
             binding.editorScreenLayout.isVisible = state.screenState == ScreenState.EDITOR
 
-            // Status e Loading
             binding.textStatus.text = state.statusMessage
             binding.btnRender.isEnabled = !state.isLoading
             binding.btnSelectVideo.isEnabled = !state.isLoading
@@ -101,7 +97,6 @@ class MainActivity : AppCompatActivity() {
             binding.textFinalPath.isVisible = state.finalVideoPath != null
             state.finalVideoPath?.let { binding.textFinalPath.text = "Saved to: $it" }
 
-            // Atualização da Interface do Editor
             if (state.screenState == ScreenState.EDITOR && state.videoProperties != null) {
                 binding.textVideoInfo.text = String.format(Locale.US, "Info: %dx%d @ %.2ffps",
                     state.videoProperties.width, state.videoProperties.height, state.videoProperties.fps)
@@ -126,7 +121,6 @@ class MainActivity : AppCompatActivity() {
                     Start: ${formatTime(startTime, state.timerFormat)} (f:${state.startFrame}) | End: ${formatTime(endTime, state.timerFormat)} (f:${state.endFrame})
                 """.trimIndent()
 
-                // Atualizar Sliders apenas se não estiverem sendo arrastados
                 updateSliderIfNotPressed(binding.seekBarPositionX, (state.timerPositionX * 100).toInt(), binding.textPositionXLabel, "Position X")
                 updateSliderIfNotPressed(binding.seekBarPositionY, (state.timerPositionY * 100).toInt(), binding.textPositionYLabel, "Position Y")
                 updateSliderIfNotPressed(binding.seekBarTimerSize, state.timerSize, binding.textTimerSizeLabel, "Size")
@@ -153,34 +147,32 @@ class MainActivity : AppCompatActivity() {
         binding.btnRender.setOnClickListener { viewModel.startRender(this) }
         binding.btnSelectFontFile.setOnClickListener { fontPickerLauncher.launch("*/*") }
 
-        // Painel de Navegação
         with(binding.navPanel) {
             btnSetStart.setOnClickListener { viewModel.setStartFrame() }
             btnSetEnd.setOnClickListener { viewModel.setEndFrame() }
             btnGoToStart.setOnClickListener { viewModel.goToStartFrame(this@MainActivity) }
             btnGoToEnd.setOnClickListener { viewModel.goToEndFrame(this@MainActivity) }
             
-            // Botões de navegação agrupados
+            // CORREÇÃO: "val" é palavra reservada, trocado por "amount"
             val frameMap = mapOf(
                 btnFrameMinus10 to -10, btnFrameMinus5 to -5, btnFrameMinus1 to -1,
                 btnFramePlus1 to 1, btnFramePlus5 to 5, btnFramePlus10 to 10
             )
-            frameMap.forEach { (btn, val) -> btn.setOnClickListener { viewModel.navigateFrames(val, this@MainActivity) } }
+            frameMap.forEach { (btn, amount) -> btn.setOnClickListener { viewModel.navigateFrames(amount, this@MainActivity) } }
 
             val secMap = mapOf(
                 btnSecMinus10 to -10, btnSecMinus5 to -5, btnSecMinus1 to -1,
                 btnSecPlus1 to 1, btnSecPlus5 to 5, btnSecPlus10 to 10
             )
-            secMap.forEach { (btn, val) -> btn.setOnClickListener { viewModel.navigateSeconds(val, this@MainActivity) } }
+            secMap.forEach { (btn, amount) -> btn.setOnClickListener { viewModel.navigateSeconds(amount, this@MainActivity) } }
             
             val minMap = mapOf(
                 btnMinMinus10 to -10, btnMinMinus5 to -5, btnMinMinus1 to -1,
                 btnMinPlus1 to 1, btnMinPlus5 to 5, btnMinPlus10 to 10
             )
-            minMap.forEach { (btn, val) -> btn.setOnClickListener { viewModel.navigateMinutes(val, this@MainActivity) } }
+            minMap.forEach { (btn, amount) -> btn.setOnClickListener { viewModel.navigateMinutes(amount, this@MainActivity) } }
         }
 
-        // Seekbar Principal
         binding.seekBarFrame.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 if (fromUser) viewModel.updateCurrentFrame(progress)
@@ -191,7 +183,6 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        // Listener genérico com Debounce
         val debouncedListener = object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 if (!fromUser) return
@@ -312,7 +303,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // Utilitário simples para UI (separado do VM pois é formatação visual rápida)
     private fun formatTime(totalSeconds: Double, format: String): String {
         val s = if (totalSeconds < 0) 0.0 else totalSeconds
         val totalMillis = Math.round(s * 1000)
@@ -332,4 +322,4 @@ class MainActivity : AppCompatActivity() {
             else -> String.format(Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis)
         }
     }
-                }
+}
