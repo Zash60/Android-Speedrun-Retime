@@ -1,10 +1,10 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android' // Adicionado
+    id 'org.jetbrains.kotlin.android'
 }
 
 android {
-    namespace 'com.example.speedruneditor' // Removi o .java do namespace para ficar mais limpo
+    namespace 'com.example.speedruneditor'
     compileSdk 34
 
     defaultConfig {
@@ -16,34 +16,40 @@ android {
     }
 
     buildFeatures {
-        viewBinding true
-    }
-    
-    kotlinOptions {
-        jvmTarget = '1.8'
+        viewBinding true // Pode remover se não for usar mais XML, mas deixe por segurança
+        compose true
     }
 
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.8' // Verifique compatibilidade com sua versão do Kotlin
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
     }
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0' // Adicionado KTX
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.activity:activity-compose:1.8.2'
+    implementation platform('androidx.compose:compose-bom:2024.02.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
     
-    // Lifecycle & ViewModel KTX
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
-    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
-    implementation 'androidx.activity:activity-ktx:1.8.2' // Para viewModels() delegate
+    // Lifecycle & ViewModel
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.7.0'
 
+    // Media3 (Mantido)
     def media3_version = "1.3.1"
     implementation "androidx.media3:media3-transformer:${media3_version}"
     implementation "androidx.media3:media3-effect:${media3_version}"
     implementation "androidx.media3:media3-common:${media3_version}"
 
-    implementation 'com.github.QuadFlask:colorpicker:0.0.13'
+    // Color Picker para Compose
+    implementation 'com.github.skydoves:colorpicker-compose:1.0.8'
 }
