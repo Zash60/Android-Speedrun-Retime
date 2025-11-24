@@ -17,6 +17,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Effect // Importante
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.BitmapOverlay
@@ -53,7 +54,6 @@ class EditorViewModel : ViewModel() {
         progressJob?.cancel()
     }
 
-    // Helper para atualizar estado usando copy
     private fun updateState(update: (UiState) -> UiState) {
         _uiState.value?.let { current ->
             _uiState.postValue(update(current))
@@ -72,10 +72,13 @@ class EditorViewModel : ViewModel() {
         val mediaItem = MediaItem.fromUri(state.selectedVideoUri)
         val timerOverlay = createTimerOverlay()
         
-        // Configuração dos efeitos Media3
+        // CORREÇÃO AQUI: Tipagem explícita para evitar erro de covariância
+        val overlayEffect = OverlayEffect(ImmutableList.of(timerOverlay))
+        val videoEffects = ImmutableList.of<Effect>(overlayEffect) 
+
         val effects = Effects(
-            emptyList(),
-            ImmutableList.of(OverlayEffect(ImmutableList.of(timerOverlay)))
+            emptyList(), // audio effects
+            videoEffects // video effects (explicitly typed as List<Effect>)
         )
         
         val editedMediaItem = EditedMediaItem.Builder(mediaItem)
@@ -105,7 +108,6 @@ class EditorViewModel : ViewModel() {
 
         transformer?.start(editedMediaItem, tempVideoFile.absolutePath)
 
-        // Monitorar progresso com Coroutines
         progressJob = viewModelScope.launch(Dispatchers.Main) {
             while (isActive && transformer != null) {
                 val progressHolder = ProgressHolder()
@@ -305,7 +307,7 @@ class EditorViewModel : ViewModel() {
 
     private fun drawTimerOnBitmap(sourceBitmap: Bitmap, currentFrame: Int, state: UiState): Bitmap {
         val mutableBitmap = sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
-        sourceBitmap.recycle() // Reciclar original
+        sourceBitmap.recycle()
         val canvas = Canvas(mutableBitmap)
         
         val elapsedSeconds = if (currentFrame < state.startFrame) 0.0 else calculateElapsedTime(state, currentFrame)
@@ -367,7 +369,7 @@ class EditorViewModel : ViewModel() {
             "MMSS" -> String.format(Locale.US, "%d:%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds)
             "MMSScc_pad" -> String.format(Locale.US, "%02d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis)
             "MMSScc" -> String.format(Locale.US, "%d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis)
-            else -> String.format(Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis) // MMSSmmm
+            else -> String.format(Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis)
         }
     }
 
@@ -395,8 +397,6 @@ class EditorViewModel : ViewModel() {
             }
         }
     }
-
-    // --- Navegação e Atualizações de UI ---
 
     fun updateCurrentFrame(frame: Int) {
         val s = _uiState.value ?: return
@@ -474,4 +474,4 @@ class EditorViewModel : ViewModel() {
     companion object {
         private const val TAG = "EditorViewModel"
     }
-                        }
+}
