@@ -1,10 +1,7 @@
 package com.example.speedruneditor
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.MotionEvent
@@ -23,7 +20,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
@@ -34,10 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -76,7 +72,6 @@ fun MainScreen(viewModel: EditorViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     
-    // Permission Launcher
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
@@ -130,6 +125,9 @@ fun InitialScreen(viewModel: EditorViewModel) {
 
 @Composable
 fun EditorScreen(viewModel: EditorViewModel, state: UiState) {
+    // CAPTURAR O CONTEXTO AQUI, FORA DOS CALLBACKS
+    val context = LocalContext.current
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -141,7 +139,7 @@ fun EditorScreen(viewModel: EditorViewModel, state: UiState) {
         item { AppearanceControls(viewModel, state) }
         item {
             Button(
-                onClick = { viewModel.startRender(LocalContext.current) },
+                onClick = { viewModel.startRender(context) }, // Usando o contexto capturado
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 enabled = !state.isLoading
             ) {
@@ -171,9 +169,8 @@ fun VideoPreviewSection(viewModel: EditorViewModel, state: UiState) {
                 .aspectRatio(16f / 9f)
                 .background(Color.Black)
                 .pointerInteropFilter {
-                    // Touch Drag Logic for Timer
                     if (it.action == MotionEvent.ACTION_MOVE || it.action == MotionEvent.ACTION_DOWN) {
-                        viewModel.updateTimerPositionX(it.x / 1000f /* Aproximado, ideal: viewWidth */, context) // Simplificado
+                        viewModel.updateTimerPositionX(it.x / 1000f, context)
                         viewModel.updateTimerPositionY(it.y / 600f, context) 
                     }
                     false
@@ -255,17 +252,16 @@ fun LRTControls(viewModel: EditorViewModel, state: UiState) {
         Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
             Text("Load Removal Tool (LRT)", style = MaterialTheme.typography.titleMedium)
             
-            // Mode Selector
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 FilterChip(
                     selected = state.timerMode == TimerMode.RTA,
                     onClick = { viewModel.setTimerMode(TimerMode.RTA) },
-                    label = { Text("RTA Only") }
+                    label = { Text("RTA") }
                 )
                 FilterChip(
                     selected = state.timerMode == TimerMode.LRT,
                     onClick = { viewModel.setTimerMode(TimerMode.LRT) },
-                    label = { Text("LRT Only") }
+                    label = { Text("LRT") }
                 )
                 FilterChip(
                     selected = state.timerMode == TimerMode.BOTH,
@@ -276,7 +272,6 @@ fun LRTControls(viewModel: EditorViewModel, state: UiState) {
             
             Divider()
             
-            // Load Marking
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
