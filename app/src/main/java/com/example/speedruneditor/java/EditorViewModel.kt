@@ -33,8 +33,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream // ADICIONADO
+import java.io.InputStream      // ADICIONADO
 import java.util.*
-import java.util.concurrent.TimeUnit // Importante para a lógica original
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(UnstableApi::class)
@@ -47,7 +49,7 @@ class EditorViewModel : ViewModel() {
     private val isFetchingFrame = AtomicBoolean(false)
     private var progressJob: Job? = null
 
-    // --- LRT LOGIC (MANTIDA) ---
+    // --- LRT LOGIC ---
 
     fun toggleLoadMark() {
         _uiState.update { state ->
@@ -81,22 +83,19 @@ class EditorViewModel : ViewModel() {
         _uiState.update { it.copy(timerMode = mode) }
     }
 
-    // --- CALCULATION LOGIC (RESTAURADA DO JAVA + LRT) ---
+    // --- CALCULATION LOGIC ---
 
     private fun calculateTimes(state: UiState, currentFrame: Int): Pair<Double, Double> {
         val props = state.videoProperties ?: return 0.0 to 0.0
         
-        // Lógica original do Java: startFrame e endFrame
         val startFrame = state.startFrame
-        // No Java original: if (currentFrame > state.endFrame) currentTime = endFrame else currentFrame
         val effectiveCurrentFrame = if (currentFrame > state.endFrame) state.endFrame else currentFrame
         
-        // 1. Cálculo RTA
+        // 1. RTA
         val rtaFrames = effectiveCurrentFrame - startFrame
-        // Divisão direta como no Java
         val rtaSeconds = rtaFrames / props.fps
 
-        // 2. Cálculo LRT (Lógica nova aplicada sobre a matemática antiga)
+        // 2. LRT
         var totalLoadFrames = 0
         state.loadSegments.forEach { segment ->
             val overlapStart = maxOf(startFrame, segment.startFrame)
@@ -113,14 +112,12 @@ class EditorViewModel : ViewModel() {
         return rtaSeconds to lrtSeconds
     }
 
-    // --- FORMAT LOGIC (RESTAURADA DO JAVA EXATAMENTE) ---
+    // --- FORMAT LOGIC (JAVA ORIGINAL) ---
     
     private fun formatTime(totalSeconds: Double, format: String): String {
-        var s = if (totalSeconds < 0) 0.0 else totalSeconds
+        val s = if (totalSeconds < 0) 0.0 else totalSeconds
         
-        // --- AQUI ESTÁ A CORREÇÃO SOLICITADA ---
-        // Java original usava Math.round(), que arredonda 66.666 para 67.
-        // O código anterior usava toLong() que truncava para 66.
+        // Lógica de arredondamento original do Java
         val totalMillis = Math.round(s * 1000)
 
         val hours = TimeUnit.MILLISECONDS.toHours(totalMillis)
@@ -129,7 +126,6 @@ class EditorViewModel : ViewModel() {
         val millis = totalMillis % 1000
         val centis = (totalMillis / 10) % 100
 
-        // Switch case do Java convertido para When do Kotlin
         return when (format) {
             "HHMMSSmmm" -> String.format(Locale.US, "%d:%02d:%02d.%03d", hours, minutes, seconds, millis)
             "SSmmm" -> String.format(Locale.US, "%.3f", s)
@@ -137,7 +133,6 @@ class EditorViewModel : ViewModel() {
             "MMSS" -> String.format(Locale.US, "%d:%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds)
             "MMSScc_pad" -> String.format(Locale.US, "%02d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis)
             "MMSScc" -> String.format(Locale.US, "%d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis)
-            // Default "MMSSmmm"
             else -> String.format(Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis)
         }
     }
@@ -292,6 +287,7 @@ class EditorViewModel : ViewModel() {
             val fontFile = File(fontsDir, fileName)
 
             try {
+                // CORREÇÃO DOS IMPORTS AQUI
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(fontFile).use { output ->
                         input.copyTo(output)
@@ -369,9 +365,8 @@ class EditorViewModel : ViewModel() {
             if (sourceFile.exists()) sourceFile.delete()
         }
     }
-
-    // --- NAVIGATION HELPERS ---
     
+    // Navigation and Update helpers...
     fun updateCurrentFrame(frame: Int, context: Context) = navigateToFrame(frame, context)
     
     fun navigateToFrame(newFrame: Int, context: Context) {
@@ -428,7 +423,7 @@ class EditorViewModel : ViewModel() {
     fun updateTimerPositionY(y: Float, ctx: Context) { _uiState.update { it.copy(timerPositionY = y) }; refreshPreview(ctx) }
     fun setTimerSize(s: Int, ctx: Context) { _uiState.update { it.copy(timerSize = s) }; refreshPreview(ctx) }
     fun updateTimerColor(c: Int, ctx: Context) { _uiState.update { it.copy(timerColor = c) }; refreshPreview(ctx) }
-    fun setOutlineWidth(w: Int) { _uiState.update { it.copy(outlineWidth = w) } } // Adicionado pois faltava
+    fun setOutlineWidth(w: Int) { _uiState.update { it.copy(outlineWidth = w) } } 
     fun toggleOutline(enabled: Boolean, ctx: Context) { _uiState.update { it.copy(outlineEnabled = enabled) }; refreshPreview(ctx) }
     fun updateOutlineColor(c: Int, ctx: Context) { _uiState.update { it.copy(outlineColor = c) }; refreshPreview(ctx) }
     fun updateTimerFormat(fmt: String, ctx: Context) { _uiState.update { it.copy(timerFormat = fmt) }; refreshPreview(ctx) }
