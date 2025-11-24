@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.*
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit // Importante para a lógica original
 import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(UnstableApi::class)
@@ -47,7 +47,7 @@ class EditorViewModel : ViewModel() {
     private val isFetchingFrame = AtomicBoolean(false)
     private var progressJob: Job? = null
 
-    // --- LRT LOGIC ---
+    // --- LRT LOGIC (MANTIDA) ---
 
     fun toggleLoadMark() {
         _uiState.update { state ->
@@ -81,20 +81,27 @@ class EditorViewModel : ViewModel() {
         _uiState.update { it.copy(timerMode = mode) }
     }
 
-    // --- CALCULATION LOGIC ---
+    // --- CALCULATION LOGIC (RESTAURADA DO JAVA + LRT) ---
 
     private fun calculateTimes(state: UiState, currentFrame: Int): Pair<Double, Double> {
         val props = state.videoProperties ?: return 0.0 to 0.0
-        val startFrame = state.startFrame
-        val effectiveCurrentFrame = currentFrame.coerceIn(startFrame, state.endFrame)
         
+        // Lógica original do Java: startFrame e endFrame
+        val startFrame = state.startFrame
+        // No Java original: if (currentFrame > state.endFrame) currentTime = endFrame else currentFrame
+        val effectiveCurrentFrame = if (currentFrame > state.endFrame) state.endFrame else currentFrame
+        
+        // 1. Cálculo RTA
         val rtaFrames = effectiveCurrentFrame - startFrame
+        // Divisão direta como no Java
         val rtaSeconds = rtaFrames / props.fps
 
+        // 2. Cálculo LRT (Lógica nova aplicada sobre a matemática antiga)
         var totalLoadFrames = 0
         state.loadSegments.forEach { segment ->
             val overlapStart = maxOf(startFrame, segment.startFrame)
             val overlapEnd = minOf(effectiveCurrentFrame, segment.endFrame)
+            
             if (overlapEnd > overlapStart) {
                 totalLoadFrames += (overlapEnd - overlapStart)
             }
@@ -104,6 +111,35 @@ class EditorViewModel : ViewModel() {
         val lrtSeconds = lrtFrames / props.fps
         
         return rtaSeconds to lrtSeconds
+    }
+
+    // --- FORMAT LOGIC (RESTAURADA DO JAVA EXATAMENTE) ---
+    
+    private fun formatTime(totalSeconds: Double, format: String): String {
+        var s = if (totalSeconds < 0) 0.0 else totalSeconds
+        
+        // --- AQUI ESTÁ A CORREÇÃO SOLICITADA ---
+        // Java original usava Math.round(), que arredonda 66.666 para 67.
+        // O código anterior usava toLong() que truncava para 66.
+        val totalMillis = Math.round(s * 1000)
+
+        val hours = TimeUnit.MILLISECONDS.toHours(totalMillis)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(totalMillis) % 60
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(totalMillis) % 60
+        val millis = totalMillis % 1000
+        val centis = (totalMillis / 10) % 100
+
+        // Switch case do Java convertido para When do Kotlin
+        return when (format) {
+            "HHMMSSmmm" -> String.format(Locale.US, "%d:%02d:%02d.%03d", hours, minutes, seconds, millis)
+            "SSmmm" -> String.format(Locale.US, "%.3f", s)
+            "HHMMSS" -> String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+            "MMSS" -> String.format(Locale.US, "%d:%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds)
+            "MMSScc_pad" -> String.format(Locale.US, "%02d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis)
+            "MMSScc" -> String.format(Locale.US, "%d:%02d.%02d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, centis)
+            // Default "MMSSmmm"
+            else -> String.format(Locale.US, "%d:%02d.%03d", TimeUnit.MILLISECONDS.toMinutes(totalMillis), seconds, millis)
+        }
     }
 
     // --- DRAWING LOGIC ---
@@ -123,10 +159,12 @@ class EditorViewModel : ViewModel() {
         
         val linesToDraw = mutableListOf<String>()
         if (state.timerMode == TimerMode.RTA || state.timerMode == TimerMode.BOTH) {
-            linesToDraw.add(if(state.timerMode == TimerMode.BOTH) "RTA: $rtaText" else rtaText)
+            val prefix = if(state.timerMode == TimerMode.BOTH) "RTA: " else ""
+            linesToDraw.add(prefix + rtaText)
         }
         if (state.timerMode == TimerMode.LRT || state.timerMode == TimerMode.BOTH) {
-            linesToDraw.add(if(state.timerMode == TimerMode.BOTH) "LRT: $lrtText" else lrtText)
+            val prefix = if(state.timerMode == TimerMode.BOTH) "LRT: " else ""
+            linesToDraw.add(prefix + lrtText)
         }
 
         val totalHeight = linesToDraw.size * lineHeight
@@ -245,6 +283,33 @@ class EditorViewModel : ViewModel() {
             }
         }
     }
+    
+    fun loadCustomFont(uri: Uri, context: Context) {
+        _uiState.update { it.copy(statusMessage = "Importing font...") }
+        viewModelScope.launch(Dispatchers.IO) {
+            val fontsDir = File(context.filesDir, "fonts").apply { mkdirs() }
+            val fileName = "custom_font_${System.currentTimeMillis()}.ttf"
+            val fontFile = File(fontsDir, fileName)
+
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(fontFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                val typeface = Typeface.createFromFile(fontFile)
+                withContext(Dispatchers.Main) {
+                    _uiState.update { 
+                        it.copy(timerTypeface = typeface, customFontName = fileName, statusMessage = "Font loaded.") 
+                    }
+                    refreshPreview(context)
+                }
+            } catch (e: Exception) {
+                Log.e("EditorViewModel", "Error loading font", e)
+                _uiState.update { it.copy(statusMessage = "Error importing font.") }
+            }
+        }
+    }
 
     fun startRender(context: Context) {
         val state = _uiState.value
@@ -348,10 +413,14 @@ class EditorViewModel : ViewModel() {
         navigateFrames((delta * fps).toInt(), context)
     }
     
+    fun navigateMinutes(delta: Int, context: Context) {
+        val fps = _uiState.value.videoProperties?.fps ?: 30.0
+        navigateFrames((delta * 60 * fps).toInt(), context)
+    }
+    
     fun setStartFrame() { _uiState.update { it.copy(startFrame = it.currentFrame) } }
     fun setEndFrame() { _uiState.update { it.copy(endFrame = it.currentFrame) } }
     
-    // Novas Funções
     fun goToStartFrame(context: Context) = navigateToFrame(_uiState.value.startFrame, context)
     fun goToEndFrame(context: Context) = navigateToFrame(_uiState.value.endFrame, context)
     
@@ -359,15 +428,10 @@ class EditorViewModel : ViewModel() {
     fun updateTimerPositionY(y: Float, ctx: Context) { _uiState.update { it.copy(timerPositionY = y) }; refreshPreview(ctx) }
     fun setTimerSize(s: Int, ctx: Context) { _uiState.update { it.copy(timerSize = s) }; refreshPreview(ctx) }
     fun updateTimerColor(c: Int, ctx: Context) { _uiState.update { it.copy(timerColor = c) }; refreshPreview(ctx) }
+    fun setOutlineWidth(w: Int) { _uiState.update { it.copy(outlineWidth = w) } } // Adicionado pois faltava
+    fun toggleOutline(enabled: Boolean, ctx: Context) { _uiState.update { it.copy(outlineEnabled = enabled) }; refreshPreview(ctx) }
+    fun updateOutlineColor(c: Int, ctx: Context) { _uiState.update { it.copy(outlineColor = c) }; refreshPreview(ctx) }
+    fun updateTimerFormat(fmt: String, ctx: Context) { _uiState.update { it.copy(timerFormat = fmt) }; refreshPreview(ctx) }
     
     fun refreshPreview(ctx: Context) = fetchFrameForPreview(_uiState.value.currentFrame, ctx)
-    
-    private fun formatTime(seconds: Double, format: String): String {
-        val s = maxOf(0.0, seconds)
-        val ms = (s * 1000).toLong()
-        return String.format(Locale.US, "%d:%02d.%03d", 
-            TimeUnit.MILLISECONDS.toMinutes(ms), 
-            TimeUnit.MILLISECONDS.toSeconds(ms) % 60, 
-            ms % 1000)
-    }
 }
