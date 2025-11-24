@@ -16,12 +16,12 @@ android {
     }
 
     buildFeatures {
-        viewBinding true // Pode remover se não for usar mais XML, mas deixe por segurança
+        viewBinding true
         compose true
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.8' // Verifique compatibilidade com sua versão do Kotlin
+        kotlinCompilerExtensionVersion '1.5.8' // Certifique-se que bate com sua versão do Kotlin
     }
 
     kotlinOptions {
@@ -40,16 +40,17 @@ dependencies {
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.compose.material:material-icons-extended'
     
-    // Lifecycle & ViewModel
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.7.0'
+    // --- CORREÇÃO DO ERRO ---
+    // Esta biblioteca contém o "Theme.Material3.Dark.NoActionBar" usado no XML
+    implementation 'com.google.android.material:material:1.12.0'
+    // ------------------------
 
-    // Media3 (Mantido)
+    // Media3
     def media3_version = "1.3.1"
     implementation "androidx.media3:media3-transformer:${media3_version}"
     implementation "androidx.media3:media3-effect:${media3_version}"
     implementation "androidx.media3:media3-common:${media3_version}"
 
-    // Color Picker para Compose
+    // Color Picker
     implementation 'com.github.skydoves:colorpicker-compose:1.0.8'
 }
