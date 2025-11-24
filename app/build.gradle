@@ -1,30 +1,44 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android' // Adicionado
 }
+
 android {
-    namespace 'com.example.speedruneditor.java'
+    namespace 'com.example.speedruneditor' // Removi o .java do namespace para ficar mais limpo
     compileSdk 34
+
     defaultConfig {
-        applicationId "com.example.speedruneditor.java"
+        applicationId "com.example.speedruneditor"
         minSdk 26
         targetSdk 34
         versionCode 1
         versionName "1.0"
     }
+
     buildFeatures {
         viewBinding true
     }
+    
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
 }
+
 dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0' // Adicionado KTX
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.7.0'
-    implementation 'androidx.lifecycle:lifecycle-livedata:2.7.0'
+    
+    // Lifecycle & ViewModel KTX
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+    implementation 'androidx.activity:activity-ktx:1.8.2' // Para viewModels() delegate
 
     def media3_version = "1.3.1"
     implementation "androidx.media3:media3-transformer:${media3_version}"
